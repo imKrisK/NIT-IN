@@ -209,7 +209,8 @@
     .btn-signal { background: var(--purple); color: #fff; }
     .btn-signal:hover { opacity: 0.88; }
     .btn-ent   { background: rgba(251,191,36,0.1); color: var(--amber); border: 1px solid var(--amber); }
-    .btn-cta.coming-soon { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    .btn-cta.coming-soon { opacity: 0.72; }
+    .btn-cta.coming-soon:hover { opacity: 1; }
 
     /* ── Comparison table ── */
     .compare-wrap {
@@ -379,7 +380,7 @@
       <li class="dim"><span class="dash">–</span>Custom NIT-ID prefix</li>
       <li class="dim"><span class="dash">–</span>API access</li>
     </ul>
-    <button onclick="handleCheckout('hub', '$9/mo')" class="btn-cta btn-hub coming-soon">Coming May 19 →</button>
+    <button onclick="openWaitlist('hub', 'HUB', '$9/mo')" class="btn-cta btn-hub coming-soon">Notify Me at Launch →</button>
   </div>
 
   <!-- SIGNAL — featured -->
@@ -402,7 +403,7 @@
       <li class="dim"><span class="dash">–</span>Dedicated instance</li>
       <li class="dim"><span class="dash">–</span>SLA</li>
     </ul>
-    <button onclick="handleCheckout('signal', '$29/mo')" class="btn-cta btn-signal coming-soon">Coming May 19 →</button>
+    <button onclick="openWaitlist('signal', 'SIGNAL', '$29/mo')" class="btn-cta btn-signal coming-soon">Notify Me at Launch →</button>
   </div>
 
   <!-- ENTERPRISE -->
@@ -424,7 +425,7 @@
       <li><span class="check">✓</span>Priority support (4h response)</li>
       <li><span class="check">✓</span>Bilateral API + webhook events</li>
     </ul>
-    <button onclick="handleCheckout('enterprise', '$99/mo')" class="btn-cta btn-ent coming-soon">Coming May 19 →</button>
+    <button onclick="openWaitlist('enterprise', 'ENTERPRISE', '$99/mo')" class="btn-cta btn-ent coming-soon">Notify Me at Launch →</button>
   </div>
 
 </div>
@@ -572,19 +573,95 @@
   <a href="/">Network</a> · <a href="/hubs.html">Hubs</a>
 </footer>
 
+<!-- ── Waitlist modal ── -->
+<div id="wl-overlay" style="
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(2,6,23,.85); backdrop-filter:blur(6px);
+  align-items:center; justify-content:center;
+" onclick="if(event.target===this)closeWaitlist()">
+  <div style="
+    background:#0f172a; border:1px solid #1e3a5f; border-radius:14px;
+    padding:32px 28px; max-width:400px; width:90%; position:relative;
+    box-shadow:0 0 40px rgba(34,211,238,.08);
+  ">
+    <button onclick="closeWaitlist()" style="
+      position:absolute; top:14px; right:16px; background:none; border:none;
+      color:#64748b; font-size:18px; cursor:pointer; line-height:1;
+    ">✕</button>
+
+    <div id="wl-plan-label" style="
+      font-size:10px; font-weight:700; letter-spacing:3px; color:#22d3ee;
+      text-transform:uppercase; margin-bottom:6px;
+    "></div>
+    <div style="font-size:15px; font-weight:700; color:#e2e8f0; margin-bottom:4px;">
+      Get notified on May 19
+    </div>
+    <div style="font-size:11px; color:#64748b; margin-bottom:20px; line-height:1.6;">
+      We'll send you one email when paid plans go live. No spam.
+    </div>
+
+    <input id="wl-email" type="email" placeholder="your@email.com"
+      autocomplete="email" autocapitalize="none" spellcheck="false"
+      style="
+        width:100%; background:#020617; border:1px solid #1e3a5f; border-radius:7px;
+        padding:10px 12px; color:#e2e8f0; font-family:inherit; font-size:12px;
+        outline:none; margin-bottom:12px;
+      "
+      oninput="this.style.borderColor='#1e3a5f'"
+      onkeydown="if(event.key==='Enter')submitWaitlist()"
+    />
+
+    <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:20px;">
+      <input id="wl-terms" type="checkbox" style="
+        margin-top:2px; accent-color:#22d3ee; flex-shrink:0; cursor:pointer;
+      "/>
+      <span style="font-size:10px; color:#64748b; line-height:1.6;">
+        I agree to the
+        <a href="https://nit-in.conversationmine.ai/terms" target="_blank" style="color:#22d3ee;">Terms of Service</a>
+        and
+        <a href="https://nit-in.conversationmine.ai/privacy" target="_blank" style="color:#22d3ee;">Privacy Policy</a>.
+        I understand paid plans launch May 19, 2026.
+      </span>
+    </label>
+
+    <button id="wl-submit" onclick="submitWaitlist()" style="
+      width:100%; padding:11px 0; border-radius:8px; border:none;
+      background:#22d3ee; color:#020617; font-weight:700; font-size:11px;
+      letter-spacing:1.5px; text-transform:uppercase; cursor:pointer;
+      transition:opacity .2s;
+    ">Notify Me →</button>
+    <div id="wl-error" style="font-size:10px; color:#f87171; margin-top:8px; min-height:14px;"></div>
+  </div>
+</div>
+
+<!-- ── Checkout success banner (shown on ?checkout=success) ── -->
+<div id="checkout-success" style="
+  display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:#0f172a; border:1px solid #34d399; border-radius:10px;
+  padding:12px 24px; font-size:11px; color:#34d399; letter-spacing:1px;
+  z-index:300; box-shadow:0 4px 24px rgba(52,211,153,.15);
+  white-space:nowrap;
+">
+  ✓ Subscription activated — welcome to NIT-IN!
+  <button onclick="this.parentElement.style.display='none'" style="
+    background:none; border:none; color:#64748b; margin-left:14px; cursor:pointer; font-size:14px; line-height:1;
+  ">✕</button>
+</div>
+
 <div id="toast"></div>
 
 <script>
+  // ── Toast ──────────────────────────────────────────────────────
   function toast(msg, ok = true) {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.style.borderColor = ok ? 'var(--green)' : 'var(--amber)';
     el.style.color = ok ? 'var(--green)' : 'var(--amber)';
     el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 3000);
+    setTimeout(() => el.classList.remove('show'), 4000);
   }
 
-  // Placeholder until Stripe price IDs are wired — posts to /api/billing/create-checkout
+  // ── Checkout (Stripe — activates once price IDs are set in Railway) ──
   async function handleCheckout(plan, label) {
     const priceIdMap = {
       hub:        window.__STRIPE_PRICE_HUB__        || '',
@@ -593,7 +670,7 @@
     };
     const priceId = priceIdMap[plan];
     if (!priceId) {
-      toast('Paid plans launch May 19 — join the waitlist!', false);
+      openWaitlist(plan, plan.toUpperCase(), label);
       return;
     }
     try {
@@ -608,6 +685,81 @@
     } catch {
       toast('Checkout unavailable — try again', false);
     }
+  }
+
+  // ── Waitlist modal ─────────────────────────────────────────────
+  let _wlPlan = '';
+
+  function openWaitlist(plan, planLabel, priceLabel) {
+    _wlPlan = plan;
+    document.getElementById('wl-plan-label').textContent = planLabel + ' · ' + priceLabel;
+    document.getElementById('wl-email').value = '';
+    document.getElementById('wl-terms').checked = false;
+    document.getElementById('wl-error').textContent = '';
+    document.getElementById('wl-email').style.borderColor = '#1e3a5f';
+    const overlay = document.getElementById('wl-overlay');
+    overlay.style.display = 'flex';
+    setTimeout(() => document.getElementById('wl-email').focus(), 80);
+  }
+
+  function closeWaitlist() {
+    document.getElementById('wl-overlay').style.display = 'none';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeWaitlist();
+  });
+
+  async function submitWaitlist() {
+    const email = document.getElementById('wl-email').value.trim();
+    const agreed = document.getElementById('wl-terms').checked;
+    const errEl  = document.getElementById('wl-error');
+    const btn    = document.getElementById('wl-submit');
+
+    errEl.textContent = '';
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      document.getElementById('wl-email').style.borderColor = '#f87171';
+      errEl.textContent = 'Please enter a valid email address.';
+      return;
+    }
+    if (!agreed) {
+      errEl.textContent = 'Please accept the Terms of Service to continue.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+      const r = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, plan: _wlPlan }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        closeWaitlist();
+        const planName = _wlPlan.toUpperCase();
+        toast(d.already_registered
+          ? `✓ ${planName} — you're already on the list!`
+          : `✓ You're on the list for ${planName}! We'll notify you May 19.`
+        );
+      } else {
+        errEl.textContent = d.error === 'invalid_email' ? 'Invalid email address.' : 'Something went wrong — try again.';
+      }
+    } catch {
+      errEl.textContent = 'Network error — please try again.';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Notify Me →';
+  }
+
+  // ── Checkout success banner ────────────────────────────────────
+  if (new URLSearchParams(location.search).get('checkout') === 'success') {
+    document.getElementById('checkout-success').style.display = 'flex';
+    history.replaceState({}, '', '/pricing');
   }
 </script>
 

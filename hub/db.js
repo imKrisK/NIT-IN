@@ -54,6 +54,14 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_dms_to   ON dms(to_id,   created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_dms_from ON dms(from_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS waitlist (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT    NOT NULL,
+    plan       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(email, plan)
+  );
 `);
 
 // ── Prepared statements ───────────────────────────────────────────
@@ -76,6 +84,9 @@ const S = {
   insertDm:    db.prepare('INSERT OR IGNORE INTO dms (id, from_id, to_id, msg, sig) VALUES (?, ?, ?, ?, ?)'),
   loadDmsTo:   db.prepare('SELECT id, from_id, to_id, msg, sig, created_at FROM dms WHERE to_id = ? ORDER BY created_at DESC LIMIT ?'),
   loadDmsFrom: db.prepare('SELECT id, from_id, to_id, msg, sig, created_at FROM dms WHERE from_id = ? ORDER BY created_at DESC LIMIT ?'),
+
+  insertWaitlist: db.prepare('INSERT OR IGNORE INTO waitlist (email, plan) VALUES (?, ?)'),
+  loadWaitlist:   db.prepare('SELECT email, plan, created_at FROM waitlist ORDER BY created_at DESC'),
 };
 
 const FEED_CAP = 2000; // max rows kept in DB
@@ -129,6 +140,18 @@ module.exports = {
     return S.loadDmsFrom.all(nit_id, limit).map(r => ({
       ...r,
       timestamp: new Date(r.created_at * 1000).toISOString(),
+    }));
+  },
+
+  // Waitlist
+  addWaitlist(email, plan) {
+    const info = S.insertWaitlist.run(email.trim().toLowerCase(), plan);
+    return info.changes > 0; // false = already signed up
+  },
+  loadWaitlist() {
+    return S.loadWaitlist.all().map(r => ({
+      ...r,
+      created_at: new Date(r.created_at * 1000).toISOString(),
     }));
   },
 

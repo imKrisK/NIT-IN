@@ -496,6 +496,23 @@ app.post('/api/billing/create-checkout', async (req, res) => {
   }
 });
 
+// ── Waitlist ──────────────────────────────────────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_PLANS = new Set(['hub', 'signal', 'enterprise']);
+
+app.post('/api/waitlist', (req, res) => {
+  const { email, plan } = req.body || {};
+  if (!email || !EMAIL_RE.test(email))         return res.status(400).json({ error: 'invalid_email' });
+  if (!plan  || !VALID_PLANS.has(plan))        return res.status(400).json({ error: 'invalid_plan' });
+  const isNew = db.addWaitlist(email, plan);
+  res.json({ ok: true, already_registered: !isNew });
+});
+
+// Admin: view waitlist (protected — same ADMIN_KEY as other admin routes)
+app.get('/api/waitlist', requireAuth, (_req, res) => {
+  res.json(db.loadWaitlist());
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
