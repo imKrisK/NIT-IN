@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT-IN Admin — Hub Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #020617;
+      --bg2:    #0a1628;
+      --bg3:    #0f1f3a;
+      --cyan:   #22d3ee;
+      --violet: #a78bfa;
+      --green:  #4ade80;
+      --gold:   #fbbf24;
+      --red:    #f87171;
+      --orange: #fb923c;
+      --text:   #e2e8f0;
+      --muted:  #64748b;
+      --border: rgba(34,211,238,.14);
+      --font:   'JetBrains Mono', monospace;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* Nav */
+    .topnav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 1rem;
+      padding: .8rem 1.6rem;
+      background: rgba(2,6,23,.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+    .nav-logo { font-size: .85rem; font-weight: 700; letter-spacing: .2em; color: var(--cyan); text-decoration: none; }
+    .nav-logo span { color: var(--violet); }
+    .nav-links { display: flex; gap: 1.4rem; }
+    .nav-link { font-size: .58rem; color: var(--muted); text-decoration: none; letter-spacing: .18em; transition: color .2s; }
+    .nav-link:hover, .nav-link.active { color: var(--cyan); }
+    .nav-sep { flex: 1; }
+    .admin-pill {
+      font-size: .5rem; letter-spacing: .2em; color: var(--red);
+      padding: .2rem .7rem; border: 1px solid rgba(248,113,113,.3);
+      border-radius: 20px; background: rgba(248,113,113,.06);
+    }
+
+    /* Page layout */
+    .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.6rem; }
+    .page-title { font-size: 1.1rem; font-weight: 600; letter-spacing: .06em; margin-bottom: .3rem; }
+    .page-sub { font-size: .62rem; color: var(--muted); letter-spacing: .1em; margin-bottom: 2rem; }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.2rem; margin-bottom: 2rem; }
+
+    /* Panels */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .panel-head {
+      padding: .9rem 1.1rem .7rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .panel-title { font-size: .65rem; font-weight: 600; letter-spacing: .25em; color: var(--cyan); text-transform: uppercase; }
+    .panel-body { padding: 1rem 1.1rem; }
+
+    /* Stat rows */
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: .42rem 0; border-bottom: 1px solid rgba(255,255,255,.03); font-size: .65rem; }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-key { color: var(--muted); letter-spacing: .06em; }
+    .stat-val { color: var(--text); font-weight: 500; }
+    .stat-val.cyan   { color: var(--cyan); }
+    .stat-val.green  { color: var(--green); }
+    .stat-val.gold   { color: var(--gold); }
+    .stat-val.red    { color: var(--red); }
+
+    /* Buttons */
+    .btn-row { display: flex; flex-wrap: wrap; gap: .7rem; padding: 1rem 1.1rem; border-top: 1px solid var(--border); }
+    .btn {
+      padding: .45rem 1.1rem;
+      border-radius: 6px; border: none; cursor: pointer;
+      font-family: var(--font); font-size: .6rem; font-weight: 600;
+      letter-spacing: .14em; transition: all .2s;
+    }
+    .btn-danger  { background: rgba(248,113,113,.12); color: var(--red);    border: 1px solid rgba(248,113,113,.25); }
+    .btn-danger:hover  { background: rgba(248,113,113,.2); }
+    .btn-default { background: rgba(34,211,238,.08);  color: var(--cyan);   border: 1px solid var(--border); }
+    .btn-default:hover { background: rgba(34,211,238,.14); }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* Log */
+    .log-box {
+      background: #010c1a;
+      border-radius: 6px;
+      font-size: .6rem; line-height: 1.7;
+      padding: .8rem 1rem;
+      max-height: 200px; overflow-y: auto;
+      color: var(--green); letter-spacing: .04em;
+    }
+    .log-line { border-bottom: 1px solid rgba(255,255,255,.03); padding: .15rem 0; }
+    .log-line.warn  { color: var(--gold); }
+    .log-line.error { color: var(--red); }
+    .log-ts { color: var(--muted); margin-right: .5rem; }
+
+    /* Peers table */
+    .peers-table { width: 100%; border-collapse: collapse; font-size: .62rem; }
+    .peers-table th { color: var(--muted); font-weight: 500; letter-spacing: .1em; padding: .4rem .6rem; text-align: left; border-bottom: 1px solid var(--border); }
+    .peers-table td { padding: .5rem .6rem; border-bottom: 1px solid rgba(255,255,255,.03); }
+    .peers-table tr:last-child td { border-bottom: none; }
+    .peer-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: .4rem; vertical-align: middle; }
+    .peer-dot.up   { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .peer-dot.down { background: var(--muted); }
+    .no-peers { text-align: center; color: var(--muted); font-size: .62rem; padding: 1.5rem; }
+
+    /* Confirm overlay */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    .overlay.show { display: flex; }
+    .confirm-box {
+      background: var(--bg2); border: 1px solid rgba(248,113,113,.4);
+      border-radius: 10px; padding: 1.6rem; max-width: 340px; width: 90%;
+    }
+    .confirm-title { font-size: .8rem; font-weight: 600; color: var(--red); margin-bottom: .6rem; }
+    .confirm-msg   { font-size: .65rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.2rem; }
+    .confirm-btns  { display: flex; gap: .7rem; justify-content: flex-end; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: .7rem 1.2rem;
+      font-size: .62rem; letter-spacing: .08em;
+      transform: translateY(80px); opacity: 0;
+      transition: all .3s; z-index: 999;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.ok  { border-color: rgba(74,222,128,.3); color: var(--green); }
+    #toast.err { border-color: rgba(248,113,113,.3); color: var(--red); }
+  </style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="/" class="nav-logo">NIT<span>-IN</span></a>
+  <div class="nav-links">
+    <a href="/"       class="nav-link">NETWORK</a>
+    <a href="/social" class="nav-link">SOCIAL</a>
+    <a href="/onboard"class="nav-link">GENESIS</a>
+    <a href="/admin"  class="nav-link active">ADMIN</a>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="admin-pill">HUB OPERATOR</div>
+</nav>
+
+<div class="page">
+  <div class="page-title">Hub Control</div>
+  <div class="page-sub">BIRTH_RIGHTS_v1.0 · Hub ID: <span id="hub-id" style="color:var(--cyan)">—</span></div>
+
+  <div class="grid">
+
+    <!-- Hub Stats -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Network Stats</div></div>
+      <div class="panel-body" id="stats-body">
+        <div class="stat-row"><span class="stat-key">Loading…</span></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-default" onclick="loadAll()">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- DB Stats -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Database</div></div>
+      <div class="panel-body" id="db-body">
+        <div class="stat-row"><span class="stat-key">Loading…</span></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" onclick="confirmAction('clear-feed', 'Clear the entire feed from DB and memory?', clearFeed)">
+          ✕ Clear Feed
+        </button>
+      </div>
+    </div>
+
+    <!-- Federation peers -->
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-head"><div class="panel-title">Federation Peers</div><span id="peer-count" style="margin-left:auto;font-size:.55rem;color:var(--muted)">—</span></div>
+      <div class="panel-body">
+        <div id="peers-body"><div class="no-peers">No peer hubs discovered yet.<br>Start another NIT-IN hub on the same LAN.</div></div>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-head"><div class="panel-title">Admin Log</div></div>
+      <div class="panel-body">
+        <div class="log-box" id="log-box"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Confirm overlay -->
+<div class="overlay" id="overlay">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirm-title">Confirm</div>
+    <div class="confirm-msg"   id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-default" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger"  id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* NIT-IN Admin Panel — Birth_Rights Protocol v1.0 */
+
+let _confirmCallback = null;
+const log = (msg, level = '') => {
+  const box = document.getElementById('log-box');
+  const d   = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-line ${level}`;
+  div.innerHTML = `<span class="log-ts">${d}</span>${msg}`;
+  box.prepend(div);
+  while (box.children.length > 50) box.lastChild.remove();
+};
+
+function toast(msg, ok = true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = ok ? 'show ok' : 'show err';
+  setTimeout(() => t.className = '', 2800);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+// ── Load all data ─────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const net = await api('/api/network');
+    document.getElementById('hub-id').textContent = net.hub_id || '—';
+
+    // Stats panel
+    const s = net.local || {};
+    document.getElementById('stats-body').innerHTML = [
+      ['Mode',        `<span class="stat-val cyan">${net.mode || '—'}</span>`],
+      ['Online nodes',`<span class="stat-val green">${s.online_nodes ?? '—'}</span>`],
+      ['Total nodes', `<span class="stat-val">${s.total_nodes ?? '—'}</span>`],
+      ['Edges',       `<span class="stat-val">${s.total_edges ?? '—'}</span>`],
+      ['Total posts', `<span class="stat-val">${s.total_posts ?? '—'}</span>`],
+      ['Density',     `<span class="stat-val">${s.network_density != null ? (s.network_density*100).toFixed(1)+'%' : '—'}</span>`],
+      ['Peer hubs',   `<span class="stat-val gold">${net.peer_count ?? 0}</span>`],
+      ['Connected',   `<span class="stat-val green">${net.connected_peers ?? 0}</span>`],
+    ].map(([k, v]) => `<div class="stat-row"><span class="stat-key">${k}</span>${v}</div>`).join('');
+
+    // DB panel — approximate from stats
+    document.getElementById('db-body').innerHTML = [
+      ['Nodes in DB',  `<span class="stat-val cyan">${s.total_nodes ?? '—'}</span>`],
+      ['Posts in DB',  `<span class="stat-val">${s.total_posts ?? '—'}</span>`],
+      ['Edges in DB',  `<span class="stat-val">${s.total_edges ?? '—'}</span>`],
+      ['DB file',      `<span class="stat-val" style="font-size:.55rem">data/nit.db</span>`],
+    ].map(([k, v]) => `<div class="stat-row"><span class="stat-key">${k}</span>${v}</div>`).join('');
+
+    // Peers
+    renderPeers(net.peers || []);
+    log(`Stats refreshed — ${s.online_nodes ?? 0} nodes online`);
+  } catch (e) {
+    log(`Refresh failed: ${e.message}`, 'error');
+    toast('Refresh failed', false);
+  }
+}
+
+function renderPeers(peers) {
+  document.getElementById('peer-count').textContent = `${peers.length} peer${peers.length !== 1 ? 's' : ''}`;
+  if (!peers.length) {
+    document.getElementById('peers-body').innerHTML =
+      '<div class="no-peers">No peer hubs discovered yet.<br>Start another NIT-IN hub on the same LAN.</div>';
+    return;
+  }
+  document.getElementById('peers-body').innerHTML = `
+    <table class="peers-table">
+      <thead><tr>
+        <th>Status</th><th>Hub ID</th><th>Name</th><th>URL</th><th>Last Seen</th>
+      </tr></thead>
+      <tbody>
+        ${peers.map(p => `<tr>
+          <td><span class="peer-dot ${p.connected ? 'up' : 'down'}"></span>${p.connected ? 'ONLINE' : 'OFFLINE'}</td>
+          <td style="color:var(--cyan)">${p.hub_id}</td>
+          <td>${p.name || '—'}</td>
+          <td style="color:var(--muted);font-size:.55rem">${p.ws_url}</td>
+          <td style="color:var(--muted)">${p.last_seen ? new Date(p.last_seen).toLocaleTimeString() : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── Clear feed ────────────────────────────────────────────────────
+async function clearFeed() {
+  try {
+    await api('/api/admin/clear-feed', { method: 'POST' });
+    toast('Feed cleared');
+    log('Feed cleared — DB + memory wiped', 'warn');
+    loadAll();
+  } catch (e) {
+    toast('Clear failed', false);
+    log(`Clear feed error: ${e.message}`, 'error');
+  }
+}
+
+// ── Confirm dialog ────────────────────────────────────────────────
+function confirmAction(id, msg, cb) {
+  _confirmCallback = cb;
+  document.getElementById('confirm-title').textContent = id.toUpperCase().replace('-', ' ');
+  document.getElementById('confirm-msg').textContent   = msg;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeConfirm() {
+  document.getElementById('overlay').classList.remove('show');
+  _confirmCallback = null;
+}
+document.getElementById('confirm-ok').addEventListener('click', () => {
+  closeConfirm();
+  if (_confirmCallback) _confirmCallback();
+});
+
+// ── WebSocket — live feed count updates ───────────────────────────
+const ws = new WebSocket(`ws://${window.location.host}`);
+ws.onmessage = evt => {
+  try {
+    const { event } = JSON.parse(evt.data);
+    if (event === 'feed:post' || event === 'node:registered') loadAll();
+    if (event === 'feed:cleared') { log('Feed cleared by operator', 'warn'); loadAll(); }
+  } catch (_) {}
+};
+
+// ── Boot ──────────────────────────────────────────────────────────
+loadAll();
+// Auto-refresh every 30s
+setInterval(loadAll, 30_000);
+log('Admin panel connected');
+</script>
+</body>
+</html>

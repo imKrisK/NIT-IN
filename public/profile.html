@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT Profile — Birth_Rights Protocol v1.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #020617;
+      --bg2:    #0a1628;
+      --bg3:    #0f1f3a;
+      --cyan:   #22d3ee;
+      --violet: #a78bfa;
+      --green:  #4ade80;
+      --gold:   #fbbf24;
+      --red:    #f87171;
+      --orange: #fb923c;
+      --text:   #e2e8f0;
+      --muted:  #64748b;
+      --border: rgba(34,211,238,.15);
+      --font:   'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    /* ── Scroll bar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Top nav ── */
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: .85rem 2rem;
+      background: rgba(2,6,23,.88);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(14px);
+    }
+    .nav-logo {
+      font-size: .85rem;
+      font-weight: 700;
+      letter-spacing: .2em;
+      color: var(--cyan);
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--violet); }
+    .nav-sep { flex: 1; }
+    .nav-link {
+      font-size: .6rem;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: .18em;
+      transition: color .2s;
+    }
+    .nav-link:hover { color: var(--cyan); }
+    .nav-badge {
+      font-size: .5rem;
+      padding: .2rem .55rem;
+      border: 1px solid rgba(74,222,128,.35);
+      border-radius: 20px;
+      color: var(--green);
+      letter-spacing: .2em;
+    }
+    .nav-badge.offline { border-color: rgba(248,113,113,.35); color: var(--red); }
+
+    /* ── Loading / error states ── */
+    #loading-state, #error-state {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      text-align: center;
+    }
+    .spin {
+      width: 38px; height: 38px;
+      border: 2px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-txt { font-size: .72rem; color: var(--muted); letter-spacing: .15em; }
+    .err-headline { font-size: 1.2rem; color: var(--red); }
+    .err-sub { font-size: .72rem; color: var(--muted); }
+
+    /* ── Page grid ── */
+    #profile-page { display: none; }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 3rem 2rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 55% at 50% -10%, rgba(34,211,238,.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      gap: 2.5rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    /* NIT identity card (mini version) */
+    .id-card {
+      flex-shrink: 0;
+      width: 200px;
+      background: linear-gradient(140deg, #091525, #0f203a);
+      border-radius: 14px;
+      padding: 1.4rem 1.2rem 1.1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .id-card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 15px;
+      background: conic-gradient(from var(--angle,0deg), var(--cyan), var(--violet), #38bdf8, var(--cyan));
+      z-index: -1;
+      animation: rotateBorder 4.5s linear infinite;
+    }
+    @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    @keyframes rotateBorder { to { --angle: 360deg; } }
+    .id-card::after {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      border-radius: 13px;
+      background: linear-gradient(140deg, #091525, #0f203a);
+      z-index: -1;
+    }
+
+    .id-card-logo { font-size: .7rem; font-weight: 700; letter-spacing: .2em; color: var(--cyan); margin-bottom: 1rem; }
+    .id-card-logo span { color: var(--violet); }
+    .id-avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-bottom: .9rem;
+      letter-spacing: .04em;
+    }
+    .id-name { font-size: .95rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: .15rem; }
+    .id-nit  { font-size: .55rem; color: var(--cyan); letter-spacing: .12em; }
+    .id-rule { height: 1px; background: var(--border); margin: .8rem 0; }
+    .id-hw   { font-size: .5rem; color: var(--gold); letter-spacing: .12em; word-break: break-all; }
+    .id-fw   { font-size: .45rem; color: var(--muted); letter-spacing: .18em; margin-top: .3rem; }
+    .id-live {
+      position: absolute; top: .9rem; right: .9rem;
+      display: flex; align-items: center; gap: .3rem;
+      font-size: .45rem; letter-spacing: .2em; color: var(--green);
+    }
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 5px var(--green);
+      position: relative;
+    }
+    .live-dot::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      border: 1px solid var(--green);
+      animation: livePulse 1.4s ease-out infinite;
+    }
+    @keyframes livePulse { 100% { transform: scale(3); opacity: 0; } }
+
+    /* Hero meta */
+    .hero-meta { flex: 1; min-width: 220px; }
+    .hero-eyebrow {
+      font-size: .55rem;
+      letter-spacing: .55em;
+      color: var(--violet);
+      text-transform: uppercase;
+      margin-bottom: .5rem;
+    }
+    .hero-name {
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.1;
+      margin-bottom: .4rem;
+    }
+    .hero-node-type {
+      font-size: .6rem;
+      letter-spacing: .3em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1.4rem;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+    }
+    .stat-item { display: flex; flex-direction: column; gap: .15rem; }
+    .stat-num  { font-size: 1.6rem; font-weight: 700; color: var(--cyan); }
+    .stat-lbl  { font-size: .5rem; letter-spacing: .4em; color: var(--muted); text-transform: uppercase; }
+
+    .sensor-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.6rem; }
+    .s-pill {
+      font-size: .52rem;
+      padding: .22rem .6rem;
+      border: 1px solid rgba(167,139,250,.4);
+      border-radius: 20px;
+      color: var(--violet);
+      letter-spacing: .07em;
+      background: rgba(167,139,250,.07);
+    }
+
+    .birth-line {
+      font-size: .62rem;
+      color: var(--muted);
+      letter-spacing: .08em;
+    }
+    .birth-line span { color: var(--text); }
+
+    /* ── Section layout ── */
+    .sections {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.6rem;
+      margin-top: 2rem;
+    }
+    @media (max-width: 680px) { .sections { grid-template-columns: 1fr; } }
+    .section-full { grid-column: 1 / -1; }
+
+    .section {
+      background: rgba(10,22,40,.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .9rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,.02);
+    }
+    .section-icon { font-size: .85rem; }
+    .section-title {
+      font-size: .58rem;
+      font-weight: 600;
+      letter-spacing: .35em;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+    .section-count {
+      margin-left: auto;
+      font-size: .52rem;
+      color: var(--muted);
+      letter-spacing: .1em;
+    }
+    .section-body { padding: 1.1rem 1.2rem; }
+
+    /* ── Connections ── */
+    .conn-list { display: flex; flex-direction: column; gap: .6rem; }
+    .conn-item {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      padding: .55rem .7rem;
+      background: rgba(255,255,255,.025);
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,.04);
+      text-decoration: none;
+      transition: border-color .2s, background .2s;
+    }
+    .conn-item:hover { border-color: var(--border); background: rgba(34,211,238,.04); }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; box-shadow: 0 0 6px var(--cyan); }
+    .conn-dot.offline { background: var(--muted); box-shadow: none; }
+    .conn-id   { font-size: .65rem; color: var(--text); letter-spacing: .05em; flex: 1; }
+    .conn-score {
+      font-size: .55rem;
+      color: var(--cyan);
+      letter-spacing: .05em;
+      background: rgba(34,211,238,.08);
+      padding: .15rem .45rem;
+      border-radius: 10px;
+    }
+    .conn-empty { font-size: .65rem; color: var(--muted); text-align: center; padding: 1rem 0; }
+
+    /* ── Resonance chart ── */
+    #resonance-chart {
+      width: 100%;
+      height: 160px;
+      display: block;
+    }
+
+    /* ── Post feed ── */
+    .post-list { display: flex; flex-direction: column; gap: .75rem; }
+    .post-item {
+      padding: .7rem .9rem;
+      background: rgba(255,255,255,.025);
+      border-radius: 8px;
+      border-left: 3px solid transparent;
+    }
+    .post-item.CAPABILITY_PULSE  { border-color: var(--muted); }
+    .post-item.SENSOR_EVENT       { border-color: var(--orange); }
+    .post-item.SOCIAL_SIGNAL      { border-color: var(--cyan); }
+
+    .post-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+    .post-badge {
+      font-size: .45rem;
+      padding: .15rem .45rem;
+      border-radius: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .post-badge.CAPABILITY_PULSE  { background: rgba(100,116,139,.15); color: var(--muted); }
+    .post-badge.SENSOR_EVENT       { background: rgba(251,146,60,.12); color: var(--orange); }
+    .post-badge.SOCIAL_SIGNAL      { background: rgba(34,211,238,.1);  color: var(--cyan); }
+    .post-ts { margin-left: auto; font-size: .52rem; color: var(--muted); }
+    .post-body { font-size: .65rem; color: var(--text); line-height: 1.7; }
+    .post-body .label { color: var(--muted); margin-right: .3rem; }
+    .post-body .val   { color: var(--cyan); }
+    .post-empty { font-size: .65rem; color: var(--muted); text-align: center; padding: 1.5rem 0; }
+
+    /* ── Sensor history / SRAM bar ── */
+    .mem-bar-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+    .mem-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .55rem;
+      color: var(--muted);
+      letter-spacing: .08em;
+    }
+    .mem-bar-track {
+      height: 6px;
+      background: var(--bg2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .mem-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width .8s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .8rem;
+    }
+    @media (max-width: 420px) { .info-grid { grid-template-columns: 1fr; } }
+    .info-field {}
+    .info-lbl { font-size: .5rem; letter-spacing: .45em; color: var(--muted); text-transform: uppercase; margin-bottom: .25rem; }
+    .info-val { font-size: .72rem; color: var(--text); letter-spacing: .05em; word-break: break-all; }
+    .info-val.gold   { color: var(--gold); }
+    .info-val.cyan   { color: var(--cyan); }
+    .info-val.violet { color: var(--violet); }
+    .info-val.green  { color: var(--green); }
+
+    /* ── Timeline ── */
+    .timeline { display: flex; flex-direction: column; gap: 0; }
+    .tl-item {
+      display: flex;
+      gap: 1rem;
+      position: relative;
+    }
+    .tl-item:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 18px;
+      bottom: -12px;
+      width: 1px;
+      background: var(--border);
+    }
+    .tl-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      margin-top: .15rem;
+      position: relative;
+      z-index: 1;
+    }
+    .tl-dot.event   { border-color: var(--orange); background: rgba(251,146,60,.15); }
+    .tl-dot.social  { border-color: var(--cyan);   background: rgba(34,211,238,.12); }
+    .tl-dot.genesis { border-color: var(--violet); background: rgba(167,139,250,.15); }
+    .tl-content { padding-bottom: 1.1rem; flex: 1; }
+    .tl-time { font-size: .52rem; color: var(--muted); letter-spacing: .05em; margin-bottom: .2rem; }
+    .tl-text { font-size: .65rem; color: var(--text); line-height: 1.6; }
+    .tl-sub  { font-size: .58rem; color: var(--muted); margin-top: .15rem; }
+
+    /* ── Declaration banner ── */
+    .decl-banner {
+      margin: 0 2rem 2rem;
+      max-width: 860px;
+      margin-left: auto;
+      margin-right: auto;
+      margin-top: -0.4rem;
+      padding: 1.1rem 1.5rem;
+      background: rgba(10,22,40,.8);
+      border: 1px solid rgba(167,139,250,.18);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .decl-icon { font-size: 1.1rem; }
+    .decl-text { flex: 1; font-size: .65rem; color: var(--muted); line-height: 1.7; }
+    .decl-text strong { color: var(--violet); }
+
+    /* ── Hover tooltip on connections ── */
+    .conn-name { font-size: .52rem; color: var(--muted); }
+
+    /* entrance animations */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(14px);
+      animation: fadeUp .45s ease forwards;
+    }
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .delay-1 { animation-delay: .08s; }
+    .delay-2 { animation-delay: .16s; }
+    .delay-3 { animation-delay: .24s; }
+    .delay-4 { animation-delay: .32s; }
+    .delay-5 { animation-delay: .40s; }
+
+    /* ── Edit button ── */
+    .edit-btn {
+      padding: .42rem 1.1rem;
+      background: transparent;
+      border: 1px solid rgba(167,139,250,.4);
+      border-radius: 6px;
+      color: var(--violet);
+      font-family: var(--font); font-size: .58rem;
+      font-weight: 600; letter-spacing: .18em;
+      cursor: pointer; transition: all .2s;
+    }
+    .edit-btn:hover {
+      background: rgba(167,139,250,.08);
+      border-color: var(--violet);
+    }
+
+    /* ── Edit overlay / panel ── */
+    .edit-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(2,6,23,.7);
+      backdrop-filter: blur(6px);
+      align-items: center; justify-content: flex-end;
+    }
+    .edit-overlay.open { display: flex; }
+    .edit-panel {
+      width: 400px; max-width: 95vw;
+      height: 100vh;
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      animation: slidePanel .28s ease;
+    }
+    @keyframes slidePanel {
+      from { transform: translateX(60px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+    .edit-header {
+      padding: 1.4rem 1.4rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: .8rem;
+    }
+    .edit-title { font-size: .8rem; font-weight: 600; color: var(--text); }
+    .edit-nit   { flex: 1; font-size: .55rem; color: var(--violet); letter-spacing: .1em; }
+    .edit-close {
+      background: none; border: none; color: var(--muted);
+      font-size: 1rem; cursor: pointer; padding: .2rem;
+      line-height: 1; transition: color .2s;
+    }
+    .edit-close:hover { color: var(--text); }
+    .edit-body  { flex: 1; overflow-y: auto; padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: 1.1rem; }
+    .edit-field { display: flex; flex-direction: column; gap: .4rem; }
+    .edit-label { font-size: .54rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; }
+    .edit-hint  { color: rgba(100,116,139,.6); font-size: .44rem; margin-left: .4rem; }
+    .edit-input {
+      width: 100%; padding: .6rem .8rem;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: var(--font); font-size: .7rem;
+      outline: none; resize: none; transition: border-color .2s;
+    }
+    .edit-input:focus { border-color: rgba(167,139,250,.5); }
+    .edit-input::placeholder { color: var(--muted); }
+    .color-row  { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .color-swatch {
+      width: 26px; height: 26px; border-radius: 50%;
+      cursor: pointer; border: 2px solid transparent;
+      transition: all .2s; flex-shrink: 0;
+    }
+    .color-swatch.active { border-color: var(--text); transform: scale(1.2); }
+    .edit-footer {
+      padding: 1rem 1.4rem;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: .8rem;
+    }
+    .edit-status { flex: 1; font-size: .58rem; color: var(--muted); }
+    .edit-status.ok  { color: var(--green); }
+    .edit-status.err { color: var(--red); }
+    .btn-save {
+      padding: .45rem 1.2rem;
+      background: var(--violet); border: none; border-radius: 6px;
+      color: var(--bg); font-family: var(--font); font-size: .58rem;
+      font-weight: 700; letter-spacing: .15em; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-save:hover:not(:disabled) { background: #c4b5fd; }
+    .btn-save:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Bio display on profile ── */
+    .bio-block {
+      margin: 0 2rem 1.6rem;
+      padding: .9rem 1.2rem;
+      background: rgba(167,139,250,.04);
+      border: 1px solid rgba(167,139,250,.12);
+      border-radius: 8px;
+      font-size: .72rem; color: var(--text); line-height: 1.75;
+    }
+    .bio-label { font-size: .48rem; color: var(--violet); letter-spacing: .2em; margin-bottom: .4rem; }
+    .bio-meta  { display: flex; gap: 1.2rem; margin-top: .5rem; flex-wrap: wrap; }
+    .bio-meta-item { font-size: .55rem; color: var(--muted); }
+    .bio-meta-item a { color: var(--cyan); text-decoration: none; }
+    .bio-meta-item a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav class="topnav">
+  <a href="/" class="nav-logo">NIT<span>-IN</span></a>
+  <div class="nav-sep"></div>
+  <a href="/" class="nav-link">NETWORK</a>
+  &nbsp;&nbsp;
+  <a href="/onboard" class="nav-link">GENESIS</a>
+  &nbsp;&nbsp;
+  <div class="nav-badge" id="status-badge">LIVE</div>
+</nav>
+
+<!-- ── Loading ── -->
+<div id="loading-state">
+  <div class="spin"></div>
+  <div class="load-txt">LOADING NODE IDENTITY…</div>
+</div>
+
+<!-- ── Error ── -->
+<div id="error-state" style="display:none;">
+  <div class="err-headline" id="err-headline">Node not found</div>
+  <div class="err-sub" id="err-sub">The NIT ID in this URL does not exist in the registry.</div>
+  <br>
+  <a href="/" style="font-size:.65rem;color:var(--cyan);text-decoration:none;letter-spacing:.15em;">← RETURN TO NETWORK</a>
+</div>
+
+<!-- ── Profile page ── -->
+<div id="profile-page">
+
+  <!-- Hero -->
+  <div class="hero fade-up">
+    <div class="hero-bg"></div>
+    <div class="hero-inner">
+      <div class="id-card">
+        <div class="id-live"><div style="position:relative;"><div class="live-dot" id="card-live-dot"></div></div><span id="card-live-txt">LIVE</span></div>
+        <div class="id-card-logo">NIT<span>-IN</span></div>
+        <div class="id-avatar" id="card-avatar">?</div>
+        <div class="id-name" id="card-name">—</div>
+        <div class="id-nit"  id="card-nit-id">—</div>
+        <div class="id-rule"></div>
+        <div class="id-hw" id="card-hw">—</div>
+        <div class="id-fw" id="card-fw">—</div>
+      </div>
+
+      <div class="hero-meta">
+        <div class="hero-eyebrow">Birth_Rights Protocol v1.0 — Node Identity Token</div>
+        <div class="hero-name"  id="hero-name">—</div>
+        <div class="hero-node-type" id="hero-type">—</div>
+
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-num" id="stat-connections">—</div>
+            <div class="stat-lbl">Connections</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num" id="stat-posts">—</div>
+            <div class="stat-lbl">Posts</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num" id="stat-uptime">—</div>
+            <div class="stat-lbl">Uptime (s)</div>
+          </div>
+        </div>
+
+        <div class="sensor-row" id="hero-sensors"></div>
+        <div class="birth-line">BORN: <span id="hero-born">—</span></div>
+
+        <!-- Edit button — only visible when viewing own profile -->
+        <div id="edit-trigger" style="display:none; margin-top:1rem; gap:.6rem; flex-wrap:wrap;">
+          <button class="edit-btn" onclick="openEdit()">✎ Edit Profile</button>
+          <button class="edit-btn" id="export-btn" onclick="exportCredential()" style="background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fbbf24;">⬇ Export NIT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Edit panel (slides in from right) ── -->
+  <div id="edit-overlay" class="edit-overlay" onclick="if(event.target===this)closeEdit()">
+    <div class="edit-panel">
+      <div class="edit-header">
+        <div class="edit-title">Edit Profile</div>
+        <div class="edit-nit" id="edit-nit-label">—</div>
+        <button class="edit-close" onclick="closeEdit()">✕</button>
+      </div>
+      <div class="edit-body">
+        <div class="edit-field">
+          <label class="edit-label">Display Name</label>
+          <input class="edit-input" id="edit-display-name" type="text" maxlength="64" placeholder="Your name or handle">
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">Bio <span class="edit-hint">280 chars</span></label>
+          <textarea class="edit-input" id="edit-bio" rows="3" maxlength="280" placeholder="A short transmission about yourself…"></textarea>
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">Website / Link</label>
+          <input class="edit-input" id="edit-website" type="text" maxlength="200" placeholder="https://…">
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">Location</label>
+          <input class="edit-input" id="edit-location" type="text" maxlength="100" placeholder="City, Planet, Node cluster…">
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">Avatar Color</label>
+          <div class="color-row" id="color-row">
+            <div class="color-swatch active" data-color="#22d3ee" style="background:#22d3ee;"></div>
+            <div class="color-swatch" data-color="#a78bfa" style="background:#a78bfa;"></div>
+            <div class="color-swatch" data-color="#4ade80" style="background:#4ade80;"></div>
+            <div class="color-swatch" data-color="#fb923c" style="background:#fb923c;"></div>
+            <div class="color-swatch" data-color="#f87171" style="background:#f87171;"></div>
+            <div class="color-swatch" data-color="#fbbf24" style="background:#fbbf24;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="edit-footer">
+        <div class="edit-status" id="edit-status"></div>
+        <button class="btn-save" id="btn-save-profile" onclick="saveProfile()">TRANSMIT CHANGES ↯</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bio block — shown when bio exists -->
+  <div id="bio-block" class="bio-block" style="display:none;">
+    <div class="bio-label">TRANSMISSION</div>
+    <div id="bio-text">—</div>
+    <div class="bio-meta" id="bio-meta"></div>
+  </div>
+
+  <!-- Declaration banner -->
+  <div class="decl-banner fade-up delay-1">
+    <div class="decl-icon">◈</div>
+    <div class="decl-text">
+      This token is <strong>sovereign</strong>. It cannot be revoked, transferred, or silenced by any platform, algorithm, or authority. It belongs to <strong id="decl-owner">this node</strong> irrevocably — by the Birth_Rights Protocol.
+    </div>
+  </div>
+
+  <!-- Sections grid -->
+  <div class="sections">
+
+    <!-- Connections -->
+    <div class="section fade-up delay-2">
+      <div class="section-head">
+        <span class="section-icon">⬡</span>
+        <span class="section-title">Resonance Connections</span>
+        <span class="section-count" id="conn-count">0 nodes</span>
+      </div>
+      <div class="section-body">
+        <div class="conn-list" id="conn-list">
+          <div class="conn-empty">No connections yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resonance chart -->
+    <div class="section fade-up delay-2">
+      <div class="section-head">
+        <span class="section-icon">◎</span>
+        <span class="section-title">Resonance Scores</span>
+        <span class="section-count" id="chart-count">—</span>
+      </div>
+      <div class="section-body" style="padding: .8rem .8rem .6rem;">
+        <canvas id="resonance-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Node identity info -->
+    <div class="section fade-up delay-3">
+      <div class="section-head">
+        <span class="section-icon">◈</span>
+        <span class="section-title">Node Identity</span>
+      </div>
+      <div class="section-body">
+        <div class="info-grid" id="info-grid"></div>
+        <br>
+        <div class="mem-bar-wrap">
+          <div class="mem-bar-label">
+            <span>FREE MEMORY</span>
+            <span id="mem-val">—</span>
+          </div>
+          <div class="mem-bar-track">
+            <div class="mem-bar-fill" id="mem-bar" style="width:0%;background:var(--cyan);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post history -->
+    <div class="section fade-up delay-3">
+      <div class="section-head">
+        <span class="section-icon">⬡</span>
+        <span class="section-title">Post History</span>
+        <span class="section-count" id="post-count">0 posts</span>
+      </div>
+      <div class="section-body" style="max-height:320px;overflow-y:auto;">
+        <div class="post-list" id="post-list">
+          <div class="post-empty">No posts yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline / hardware autobiography -->
+    <div class="section section-full fade-up delay-4">
+      <div class="section-head">
+        <span class="section-icon">◎</span>
+        <span class="section-title">Hardware Autobiography</span>
+        <span class="section-count">chronological events</span>
+      </div>
+      <div class="section-body">
+        <div class="timeline" id="timeline"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   NIT-IN Profile Page — Birth_Rights Protocol v1.0
+═══════════════════════════════════════════════════════════════ */
+
+// ── Extract NIT ID from URL ──────────────────────────────────────
+const NIT_ID = (() => {
+  const parts = window.location.pathname.split('/');
+  const idx   = parts.indexOf('profile');
+  return idx >= 0 ? decodeURIComponent(parts[idx + 1] || '') : '';
+})();
+
+// ── Utils ────────────────────────────────────────────────────────
+function fmt(iso) {
+  if (!iso) return '—';
+  return iso.replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+function relTime(iso) {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+function el(id) { return document.getElementById(id); }
+
+function animCounter(elem, to, dur = 900) {
+  if (!elem) return;
+  const start = performance.now();
+  const from  = 0;
+  (function tick(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    elem.textContent = Math.round(from + (to - from) * ease);
+    if (t < 1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+function postBodyHtml(post) {
+  if (post.type === 'CAPABILITY_PULSE') {
+    return `<span class="label">PULSE</span><span class="val">${post.node_id}</span>` +
+           (post.sensors ? `&nbsp; <span class="label">sensors</span><span class="val">${post.sensors.join(', ')}</span>` : '');
+  }
+  if (post.type === 'SENSOR_EVENT') {
+    return `<span class="label">SENSOR</span><span class="val">${post.sensor || '—'}</span>` +
+           (post.confidence != null ? `&nbsp; <span class="label">confidence</span><span class="val">${(post.confidence * 100).toFixed(0)}%</span>` : '');
+  }
+  if (post.type === 'SOCIAL_SIGNAL') {
+    return `<span class="label">→</span><span class="val">${post.to || '?'}</span>` +
+           (post.msg ? `&nbsp; <span class="label">msg</span><span class="val">${post.msg}</span>` : '') +
+           (post.resonance_score != null ? `&nbsp; <span class="label">score</span><span class="val">${post.resonance_score}</span>` : '');
+  }
+  return JSON.stringify(post).slice(0, 80);
+}
+
+// ── Render ───────────────────────────────────────────────────────
+function render(data) {
+  const { node, edges, posts } = data;
+  const sensors   = node.capabilities?.sensors || [];
+  const sramBytes = node.capabilities?.sram_bytes || 1024;
+  const freeMem   = node.free_mem || sramBytes;
+
+  // ── Nav badge
+  const badge = el('status-badge');
+  if (!node.online) { badge.textContent = 'OFFLINE'; badge.classList.add('offline'); }
+
+  // ── Mini card
+  const initials = (node.name || node.node_id).slice(0, 2).toUpperCase();
+  el('card-avatar').textContent    = initials;
+  el('card-name').textContent      = node.display_name || node.name || node.node_id;
+  el('card-nit-id').textContent    = node.node_id;
+  el('card-hw').textContent        = (node.hw_sig || '').toUpperCase();
+  el('card-fw').textContent        = node.capabilities?.firmware || 'HARDWARE_NODE';
+  if (!node.online) {
+    el('card-live-dot').style.background = 'var(--red)';
+    el('card-live-dot').style.boxShadow  = '0 0 5px var(--red)';
+    el('card-live-txt').textContent = 'OFFLINE';
+    el('card-live-txt').style.color = 'var(--red)';
+  }
+
+  // ── Hero
+  el('hero-name').textContent = node.display_name || node.name || node.node_id;
+  el('hero-type').textContent = (node.node_type || 'hardware').toUpperCase() + ' NODE';
+  el('hero-born').textContent = fmt(node.first_seen);
+  el('decl-owner').textContent = node.display_name || node.name || node.node_id;
+
+  // ── Bio block
+  if (node.bio) {
+    el('bio-text').textContent = node.bio;
+    el('bio-block').style.display = 'block';
+    const metaEl = el('bio-meta');
+    if (node.website) metaEl.innerHTML += `<span class="bio-meta-item"><a href="${node.website}" target="_blank" rel="noopener">${node.website}</a></span>`;
+    if (node.location) metaEl.innerHTML += `<span class="bio-meta-item">◎ ${node.location}</span>`;
+  }
+
+  // ── Show edit button if own profile
+  checkOwnership(node);
+
+  animCounter(el('stat-connections'), node.connections?.length || edges.length, 800);
+  animCounter(el('stat-posts'),       node.post_count || posts.length,          900);
+  animCounter(el('stat-uptime'),      node.uptime || 0,                         700);
+
+  // Sensor pills
+  const sensorsEl = el('hero-sensors');
+  for (const s of sensors) {
+    const p = document.createElement('span');
+    p.className = 's-pill';
+    p.textContent = s;
+    sensorsEl.appendChild(p);
+  }
+
+  // ── Connections list
+  const connList = el('conn-list');
+  el('conn-count').textContent = `${edges.length} node${edges.length !== 1 ? 's' : ''}`;
+  if (edges.length) {
+    connList.innerHTML = '';
+    for (const e of edges) {
+      const a = document.createElement('a');
+      a.className = 'conn-item';
+      a.href = `/profile/${e.peer}`;
+      const isOnline = true; // optimistic
+      a.innerHTML = `
+        <div class="conn-dot ${isOnline ? '' : 'offline'}"></div>
+        <div style="flex:1;">
+          <div class="conn-id">${e.peer}</div>
+        </div>
+        <div class="conn-score">↯ ${e.resonance_score?.toFixed ? e.resonance_score.toFixed(2) : e.resonance_score}</div>
+      `;
+      connList.appendChild(a);
+    }
+  }
+
+  // ── Resonance chart
+  drawResonanceChart(edges);
+
+  // ── Identity info grid
+  const infoGrid = el('info-grid');
+  const infoFields = [
+    { label: 'Node ID',        val: node.node_id,                         cls: 'cyan'   },
+    { label: 'Node Type',      val: (node.node_type || 'hardware').toUpperCase(), cls: ''  },
+    { label: 'Hardware Sig',   val: (node.hw_sig || '—').toUpperCase(),   cls: 'gold'   },
+    { label: 'Firmware',       val: node.capabilities?.firmware || '—',   cls: 'violet' },
+    { label: 'SRAM Total',     val: `${sramBytes} bytes`,                 cls: ''       },
+    { label: 'Sensor Count',   val: sensors.length,                       cls: 'cyan'   },
+    { label: 'First Seen',     val: fmt(node.first_seen),                 cls: ''       },
+    { label: 'Status',         val: node.online ? 'ONLINE' : 'OFFLINE',  cls: node.online ? 'green' : 'red' },
+  ];
+  infoGrid.innerHTML = '';
+  for (const f of infoFields) {
+    infoGrid.innerHTML += `
+      <div class="info-field">
+        <div class="info-lbl">${f.label}</div>
+        <div class="info-val ${f.cls}">${f.val}</div>
+      </div>`;
+  }
+
+  // Memory bar
+  const pct = Math.round((freeMem / sramBytes) * 100);
+  el('mem-val').textContent = `${freeMem} / ${sramBytes} bytes (${pct}%)`;
+  const color = pct > 60 ? 'var(--green)' : pct > 30 ? 'var(--gold)' : 'var(--red)';
+  el('mem-bar').style.background = color;
+  setTimeout(() => { el('mem-bar').style.width = pct + '%'; }, 300);
+
+  // ── Post history
+  const postList = el('post-list');
+  el('post-count').textContent = `${posts.length} post${posts.length !== 1 ? 's' : ''}`;
+  if (posts.length) {
+    postList.innerHTML = '';
+    for (const p of posts.slice(0, 30)) {
+      postList.innerHTML += `
+        <div class="post-item ${p.type || ''}">
+          <div class="post-header">
+            <span class="post-badge ${p.type || ''}">${p.type || 'POST'}</span>
+            <span class="post-ts">${relTime(p.timestamp)}</span>
+          </div>
+          <div class="post-body">${postBodyHtml(p)}</div>
+        </div>`;
+    }
+  }
+
+  // ── Timeline (hardware autobiography)
+  buildTimeline(node, edges, posts);
+}
+
+// ── Resonance bar chart ──────────────────────────────────────────
+function drawResonanceChart(edges) {
+  const c   = el('resonance-chart');
+  const ctx = c.getContext('2d');
+  const W   = c.clientWidth || 340;
+  const H   = 160;
+  c.width   = W;
+  c.height  = H;
+  el('chart-count').textContent = `${edges.length} edges`;
+
+  if (!edges.length) {
+    ctx.font      = '12px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(100,116,139,.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText('No connections to chart yet', W / 2, H / 2);
+    return;
+  }
+
+  const sorted = [...edges].sort((a, b) => (b.resonance_score || 0) - (a.resonance_score || 0)).slice(0, 10);
+  const barH   = Math.floor((H - 24) / sorted.length);
+  const maxSc  = Math.max(...sorted.map(e => e.resonance_score || 0), 1);
+  const pad    = 6;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const e     = sorted[i];
+    const score = e.resonance_score || 0;
+    const y     = pad + i * barH;
+    const bw    = Math.round(((W - 90) * score) / maxSc);
+
+    // Bar
+    const g = ctx.createLinearGradient(80, 0, 80 + bw, 0);
+    g.addColorStop(0, 'rgba(34,211,238,.8)');
+    g.addColorStop(1, 'rgba(167,139,250,.5)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect?.(80, y + 2, bw, barH - 5, 3) || ctx.rect(80, y + 2, bw, barH - 5);
+    ctx.fill();
+
+    // Label
+    ctx.font      = '9px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(100,116,139,.8)';
+    ctx.textAlign = 'right';
+    ctx.fillText(e.peer?.slice(-8) || '—', 76, y + barH - 6);
+
+    // Score
+    ctx.fillStyle = 'rgba(34,211,238,.7)';
+    ctx.textAlign = 'left';
+    ctx.fillText(score.toFixed ? score.toFixed(2) : score, 82 + bw + 4, y + barH - 6);
+  }
+}
+
+// ── Hardware Autobiography timeline ─────────────────────────────
+function buildTimeline(node, edges, posts) {
+  const tl = el('timeline');
+  const events = [];
+
+  // Genesis
+  events.push({
+    ts:   node.first_seen,
+    cls:  'genesis',
+    text: `NIT GENESIS — ${node.node_id} came online`,
+    sub:  `Node type: ${(node.node_type || 'hardware').toUpperCase()} · Firmware: ${node.capabilities?.firmware || '—'}`,
+  });
+
+  // Connections
+  for (const e of edges) {
+    events.push({
+      ts:   e.established,
+      cls:  'social',
+      text: `RESONANCE ESTABLISHED with ${e.peer}`,
+      sub:  `Score: ${e.resonance_score?.toFixed ? e.resonance_score.toFixed(2) : e.resonance_score}`,
+    });
+  }
+
+  // Posts
+  for (const p of posts) {
+    const cls = p.type === 'SOCIAL_SIGNAL' ? 'social'
+              : p.type === 'SENSOR_EVENT'  ? 'event'
+              : 'genesis';
+    events.push({
+      ts:   p.timestamp,
+      cls,
+      text: `${p.type || 'POST'} emitted`,
+      sub:  postBodyHtml(p).replace(/<[^>]+>/g, ' ').trim(),
+    });
+  }
+
+  // Sort chronological
+  events.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+  if (!events.length) {
+    tl.innerHTML = '<div style="font-size:.65rem;color:var(--muted);">No events recorded yet.</div>';
+    return;
+  }
+
+  tl.innerHTML = '';
+  for (const ev of events) {
+    tl.innerHTML += `
+      <div class="tl-item">
+        <div class="tl-dot ${ev.cls}"></div>
+        <div class="tl-content">
+          <div class="tl-time">${fmt(ev.ts)}</div>
+          <div class="tl-text">${ev.text}</div>
+          ${ev.sub ? `<div class="tl-sub">${ev.sub}</div>` : ''}
+        </div>
+      </div>`;
+  }
+}
+
+// ── Live WebSocket updates ───────────────────────────────────────
+function connectWS() {
+  const ws = new WebSocket(`ws://${window.location.host}`);
+
+  ws.onmessage = ({ data }) => {
+    try {
+      const { event, data: d } = JSON.parse(data);
+      if (event === 'node:pulse' && d?.node_id === NIT_ID) {
+        const u = el('stat-uptime');
+        if (u && d.uptime != null) u.textContent = d.uptime;
+      }
+      if (event === 'feed:post' && d?.node_id === NIT_ID) {
+        const postList = el('post-list');
+        if (postList) {
+          const div = document.createElement('div');
+          div.className = `post-item ${d.type || ''}`;
+          div.innerHTML = `
+            <div class="post-header">
+              <span class="post-badge ${d.type || ''}">${d.type || 'POST'}</span>
+              <span class="post-ts">just now</span>
+            </div>
+            <div class="post-body">${postBodyHtml(d)}</div>`;
+          if (postList.querySelector('.post-empty')) postList.innerHTML = '';
+          postList.prepend(div);
+        }
+      }
+    } catch (_) {}
+  };
+
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+async function init() {
+  if (!NIT_ID) {
+    el('loading-state').style.display = 'none';
+    el('error-state').style.display   = 'flex';
+    el('err-headline').textContent = 'No NIT ID provided';
+    el('err-sub').textContent = 'URL must be /profile/<NIT_ID>';
+    return;
+  }
+
+  document.title = `${NIT_ID} — NIT Profile`;
+
+  try {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(NIT_ID)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    el('loading-state').style.display = 'none';
+    el('profile-page').style.display  = 'block';
+
+    render(data);
+    connectWS();
+  } catch (err) {
+    el('loading-state').style.display = 'none';
+    el('error-state').style.display   = 'flex';
+    el('err-headline').textContent = 'Node not found';
+    el('err-sub').textContent = `No node with ID "${NIT_ID}" in the registry. It may have rebooted.`;
+  }
+}
+
+// ── Edit profile ─────────────────────────────────────────────────
+let _selectedColor = '#22d3ee';
+
+function checkOwnership(node) {
+  try {
+    const myNit = JSON.parse(localStorage.getItem('nit_in_my_token') || 'null');
+    if (myNit?.node_id === node.node_id) {
+      el('edit-trigger').style.display = 'flex';
+      el('edit-nit-label').textContent  = node.node_id;
+    }
+  } catch (_) {}
+}
+
+function openEdit() {
+  const overlay = el('edit-overlay');
+  overlay.classList.add('open');
+
+  // Pre-fill with current values from the page
+  try {
+    const myNit = JSON.parse(localStorage.getItem('nit_in_my_token') || 'null');
+    if (myNit?.display_name) el('edit-display-name').value = myNit.display_name;
+    if (myNit?.bio)          el('edit-bio').value          = myNit.bio;
+    if (myNit?.website)      el('edit-website').value      = myNit.website;
+    if (myNit?.location)     el('edit-location').value     = myNit.location;
+    if (myNit?.avatar_color) {
+      _selectedColor = myNit.avatar_color;
+      document.querySelectorAll('.color-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === _selectedColor);
+      });
+    }
+  } catch (_) {}
+
+  el('edit-status').textContent = '';
+  el('edit-status').className   = 'edit-status';
+}
+
+function closeEdit() {
+  el('edit-overlay').classList.remove('open');
+}
+
+for (const swatch of document.querySelectorAll('.color-swatch')) {
+  swatch.addEventListener('click', () => {
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+    _selectedColor = swatch.dataset.color;
+  });
+}
+
+async function saveProfile() {
+  const btn = el('btn-save-profile');
+  const status = el('edit-status');
+  btn.disabled = true;
+  status.textContent = 'Transmitting…';
+  status.className = 'edit-status';
+
+  const body = {
+    display_name:  el('edit-display-name').value.trim(),
+    bio:           el('edit-bio').value.trim(),
+    website:       el('edit-website').value.trim(),
+    location:      el('edit-location').value.trim(),
+    avatar_color:  _selectedColor,
+  };
+  // Remove empty fields
+  for (const k of Object.keys(body)) { if (!body[k]) delete body[k]; }
+
+  try {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(NIT_ID)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    // Update localStorage so compose box / social page reflect change
+    const myNit = JSON.parse(localStorage.getItem('nit_in_my_token') || '{}');
+    localStorage.setItem('nit_in_my_token', JSON.stringify({ ...myNit, ...body }));
+
+    // Update bio block on page
+    if (data.node?.bio) {
+      el('bio-text').textContent = data.node.bio;
+      el('bio-block').style.display = 'block';
+    }
+    if (data.node?.display_name) {
+      el('hero-name').textContent = data.node.display_name;
+    }
+
+    status.textContent = '✓ Saved';
+    status.className   = 'edit-status ok';
+    setTimeout(closeEdit, 1200);
+  } catch (err) {
+    status.textContent = `✕ ${err.message}`;
+    status.className   = 'edit-status err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── NIT Portable Credential Export ────────────────────────────────
+async function exportCredential() {
+  const btn = el('export-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⬇ Exporting…';
+  try {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(NIT_ID)}/export`);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${NIT_ID}-credential.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    btn.textContent = '✓ Downloaded';
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Export NIT'; }, 2000);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '✕ Failed';
+    setTimeout(() => { btn.textContent = '⬇ Export NIT'; }, 2000);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

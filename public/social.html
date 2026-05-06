@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT-IN Social — The Living Feed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #020617;
+      --bg2:      #0a1628;
+      --bg3:      #0f1f3a;
+      --cyan:     #22d3ee;
+      --violet:   #a78bfa;
+      --green:    #4ade80;
+      --gold:     #fbbf24;
+      --red:      #f87171;
+      --orange:   #fb923c;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --border:   rgba(34,211,238,.14);
+      --font:     'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Scanline overlay ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,.04) 2px,
+        rgba(0,0,0,.04) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Top nav ── */
+    .topnav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 1rem;
+      padding: .8rem 1.6rem;
+      background: rgba(2,6,23,.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+    .nav-logo {
+      font-size: .85rem; font-weight: 700;
+      letter-spacing: .2em; color: var(--cyan);
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--violet); }
+    .nav-links { display: flex; gap: 1.4rem; }
+    .nav-link {
+      font-size: .58rem; color: var(--muted);
+      text-decoration: none; letter-spacing: .18em;
+      transition: color .2s;
+    }
+    .nav-link:hover, .nav-link.active { color: var(--cyan); }
+    .nav-sep { flex: 1; }
+
+    /* Live status pill */
+    .live-pill {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .5rem; letter-spacing: .22em;
+      color: var(--green);
+      padding: .2rem .7rem;
+      border: 1px solid rgba(74,222,128,.25);
+      border-radius: 20px;
+      background: rgba(74,222,128,.05);
+    }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 5px var(--green);
+      animation: dotPulse 1.4s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%,100% { opacity: 1; } 50% { opacity: .3; }
+    }
+
+    /* ── Page shell ── */
+    .shell {
+      display: grid;
+      grid-template-columns: 260px 1fr 260px;
+      gap: 0;
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: calc(100vh - 48px);
+    }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar-left, .sidebar-right { display: none; }
+    }
+
+    /* ── Sidebars ── */
+    .sidebar-left, .sidebar-right {
+      border-right: 1px solid var(--border);
+      padding: 1.6rem 1.2rem;
+      position: sticky; top: 48px;
+      height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+    .sidebar-right { border-right: none; border-left: 1px solid var(--border); }
+
+    .sidebar-section { margin-bottom: 2rem; }
+    .sidebar-title {
+      font-size: .52rem; font-weight: 600;
+      letter-spacing: .45em; color: var(--cyan);
+      text-transform: uppercase;
+      margin-bottom: .9rem;
+      padding-bottom: .4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Network stats */
+    .net-stats { display: flex; flex-direction: column; gap: .6rem; }
+    .net-stat {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .62rem;
+    }
+    .net-stat-label { color: var(--muted); letter-spacing: .06em; }
+    .net-stat-val   { color: var(--text); font-weight: 500; }
+    .net-stat-val.cyan   { color: var(--cyan); }
+    .net-stat-val.green  { color: var(--green); }
+    .net-stat-val.violet { color: var(--violet); }
+
+    /* Online nodes list */
+    .node-list { display: flex; flex-direction: column; gap: .4rem; }
+    .node-pill {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .4rem .6rem;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: background .2s;
+      cursor: pointer;
+    }
+    .node-pill:hover { background: rgba(34,211,238,.05); }
+    .np-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      background: var(--green); box-shadow: 0 0 4px var(--green);
+    }
+    .np-dot.human { background: var(--violet); box-shadow: 0 0 4px var(--violet); }
+    .np-id   { font-size: .58rem; color: var(--text); flex: 1; letter-spacing: .04em; }
+    .np-conns{ font-size: .5rem;  color: var(--muted); }
+
+    /* Filter chips */
+    .filter-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .chip {
+      font-size: .5rem; padding: .22rem .65rem;
+      border: 1px solid var(--border); border-radius: 20px;
+      color: var(--muted); letter-spacing: .1em;
+      cursor: pointer; transition: all .2s;
+      background: transparent;
+      font-family: var(--font);
+    }
+    .chip:hover, .chip.active {
+      border-color: var(--cyan); color: var(--cyan);
+      background: rgba(34,211,238,.06);
+    }
+    .chip.active.SOCIAL_SIGNAL  { border-color: var(--cyan);   color: var(--cyan);   background: rgba(34,211,238,.08); }
+    .chip.active.SENSOR_EVENT   { border-color: var(--orange); color: var(--orange); background: rgba(251,146,60,.08); }
+    .chip.active.CAPABILITY_PULSE { border-color: var(--muted); color: var(--muted); }
+
+    /* ── Main feed ── */
+    .feed-col {
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+
+    .feed-header {
+      position: sticky; top: 48px; z-index: 100;
+      padding: 1.1rem 1.4rem .9rem;
+      background: rgba(2,6,23,.9);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      display: flex; align-items: center; gap: .8rem;
+    }
+    .feed-title {
+      font-size: .85rem; font-weight: 600;
+      color: var(--text); letter-spacing: .06em;
+    }
+    .feed-sub {
+      font-size: .55rem; color: var(--muted);
+      letter-spacing: .12em;
+    }
+    .feed-count {
+      margin-left: auto;
+      font-size: .55rem; color: var(--muted);
+      letter-spacing: .1em;
+    }
+
+    /* New posts toast */
+    .new-toast {
+      display: none;
+      text-align: center;
+      padding: .5rem;
+      background: rgba(34,211,238,.07);
+      border-bottom: 1px solid rgba(34,211,238,.12);
+      font-size: .58rem; color: var(--cyan); letter-spacing: .15em;
+      cursor: pointer; transition: background .2s;
+      position: sticky; top: calc(48px + 58px); z-index: 99;
+    }
+    .new-toast:hover { background: rgba(34,211,238,.12); }
+    .new-toast.show { display: block; }
+
+    /* Compose box */
+    .compose-box {
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: .8rem; align-items: flex-start;
+    }
+    .compose-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--bg3); border: 1px solid rgba(167,139,250,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .65rem; font-weight: 700; color: var(--violet);
+      flex-shrink: 0;
+    }
+    .compose-right { flex: 1; display: flex; flex-direction: column; gap: .5rem; }
+    .compose-input {
+      width: 100%; padding: .65rem .8rem;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--font); font-size: .72rem;
+      resize: none; outline: none; line-height: 1.6;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .compose-input:focus {
+      border-color: rgba(167,139,250,.5);
+      box-shadow: 0 0 0 3px rgba(167,139,250,.07);
+    }
+    .compose-input::placeholder { color: var(--muted); }
+    .compose-footer { display: flex; align-items: center; justify-content: flex-end; gap: .7rem; }
+    .compose-nit {
+      font-size: .52rem; color: var(--muted); letter-spacing: .08em;
+    }
+    .compose-nit span { color: var(--violet); }
+    .btn-post {
+      padding: .4rem 1.1rem;
+      background: var(--violet); border: none; border-radius: 6px;
+      color: var(--bg); font-family: var(--font); font-size: .6rem;
+      font-weight: 600; letter-spacing: .15em; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-post:hover { background: #c4b5fd; transform: translateY(-1px); }
+    .btn-post:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+    .compose-hint {
+      font-size: .5rem; color: var(--muted); letter-spacing: .06em;
+    }
+    .compose-hint span { color: var(--orange); }
+
+    /* Post cards */
+    .post-stream { flex: 1; }
+
+    .post-card {
+      padding: 1.1rem 1.4rem;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      transition: background .18s;
+      position: relative;
+      overflow: hidden;
+      animation: slideIn .3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .post-card:hover { background: rgba(255,255,255,.015); }
+
+    /* Type accent stripe */
+    .post-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+    }
+    .post-card.SOCIAL_SIGNAL::before   { background: var(--cyan); }
+    .post-card.SENSOR_EVENT::before    { background: var(--orange); }
+    .post-card.CAPABILITY_PULSE::before{ background: rgba(100,116,139,.4); }
+    .post-card.human-post::before      { background: var(--violet); }
+
+    .post-header {
+      display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem;
+    }
+    .post-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .62rem; font-weight: 700; flex-shrink: 0;
+    }
+    .post-avatar.hw    { background: rgba(34,211,238,.12);   color: var(--cyan);   border: 1px solid rgba(34,211,238,.2); }
+    .post-avatar.human { background: rgba(167,139,250,.12);  color: var(--violet); border: 1px solid rgba(167,139,250,.2); }
+    .post-avatar.sensor{ background: rgba(251,146,60,.1);    color: var(--orange); border: 1px solid rgba(251,146,60,.18); }
+
+    .post-meta { flex: 1; min-width: 0; }
+    .post-nit  {
+      font-size: .65rem; font-weight: 600; color: var(--text);
+      letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .post-nit a { color: inherit; text-decoration: none; }
+    .post-nit a:hover { color: var(--cyan); }
+    .post-node-sub { font-size: .52rem; color: var(--muted); letter-spacing: .05em; }
+
+    .post-badge {
+      font-size: .44rem; padding: .18rem .5rem;
+      border-radius: 10px; letter-spacing: .12em; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .post-badge.SOCIAL_SIGNAL   { background: rgba(34,211,238,.1);  color: var(--cyan); }
+    .post-badge.SENSOR_EVENT    { background: rgba(251,146,60,.1);  color: var(--orange); }
+    .post-badge.CAPABILITY_PULSE{ background: rgba(100,116,139,.12);color: var(--muted); }
+    .post-badge.HUMAN_SIGNAL    { background: rgba(167,139,250,.12);color: var(--violet); }
+
+    /* Remote hub origin badge */
+    .remote-hub-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .42rem; padding: .15rem .45rem;
+      border-radius: 8px; letter-spacing: .1em;
+      background: rgba(251,191,36,.07);
+      border: 1px solid rgba(251,191,36,.2);
+      color: var(--gold);
+      margin-left: .3rem;
+    }
+    .remote-hub-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--gold); flex-shrink: 0;
+    }
+    .post-card.remote::before { background: var(--gold); }
+
+    .post-ts { font-size: .5rem; color: var(--muted); flex-shrink: 0; }
+
+    /* Post body */
+    .post-body { font-size: .72rem; color: var(--text); line-height: 1.75; margin-bottom: .6rem; }
+    .post-body .label { color: var(--muted); margin-right: .3rem; font-size: .65rem; }
+    .post-body .val   { color: var(--cyan); }
+    .post-body .val.orange { color: var(--orange); }
+    .post-body .val.violet { color: var(--violet); }
+    .post-body .human-text { color: var(--text); font-size: .72rem; }
+
+    /* Confidence / resonance meter */
+    .post-meter {
+      display: flex; align-items: center; gap: .5rem;
+      margin-top: .35rem;
+    }
+    .meter-label { font-size: .48rem; color: var(--muted); letter-spacing: .12em; width: 70px; }
+    .meter-track {
+      flex: 1; height: 3px; background: var(--bg3); border-radius: 3px; overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
+    .meter-val { font-size: .5rem; color: var(--muted); width: 32px; text-align: right; }
+
+    /* Post actions */
+    .post-actions {
+      display: flex; gap: 1.4rem; margin-top: .4rem;
+    }
+    .action-btn {
+      display: flex; align-items: center; gap: .3rem;
+      font-size: .52rem; color: var(--muted); letter-spacing: .08em;
+      background: none; border: none; font-family: var(--font);
+      cursor: pointer; transition: color .2s; padding: 0;
+    }
+    .action-btn:hover.resonate { color: var(--cyan); }
+    .action-btn:hover.observe  { color: var(--violet); }
+    .action-btn:hover.signal   { color: var(--orange); }
+    .action-btn .count { font-size: .5rem; }
+
+    /* Resonance chain — when two nodes lock in */
+    .resonance-chain {
+      margin-top: .6rem; padding: .5rem .7rem;
+      background: rgba(34,211,238,.04);
+      border: 1px solid rgba(34,211,238,.12);
+      border-radius: 6px;
+      font-size: .6rem; color: var(--cyan); letter-spacing: .06em;
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .chain-score {
+      margin-left: auto;
+      font-size: .52rem; color: var(--muted);
+    }
+
+    /* Empty / loading */
+    .feed-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 1rem; padding: 4rem 2rem;
+      text-align: center;
+    }
+    .feed-empty-icon { font-size: 2rem; opacity: .3; }
+    .feed-empty-txt  { font-size: .7rem; color: var(--muted); line-height: 1.7; }
+
+    .loading-bar {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      background-size: 200% 100%;
+      animation: loadBar 1.4s ease-in-out infinite;
+    }
+    @keyframes loadBar { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }
+
+    /* ── Right sidebar — resonance activity ── */
+    .activity-list { display: flex; flex-direction: column; gap: .5rem; }
+    .activity-item {
+      padding: .5rem .6rem;
+      background: rgba(255,255,255,.02);
+      border-radius: 6px;
+      border-left: 2px solid transparent;
+      font-size: .58rem;
+    }
+    .activity-item.resonate  { border-color: var(--cyan); }
+    .activity-item.sensor    { border-color: var(--orange); }
+    .activity-item.genesis   { border-color: var(--violet); }
+    .activity-item-text { color: var(--text); line-height: 1.5; }
+    .activity-item-ts   { color: var(--muted); font-size: .48rem; margin-top: .15rem; }
+
+    /* Frequency chart */
+    #freq-canvas {
+      width: 100%; height: 80px; display: block;
+      border-radius: 6px;
+    }
+
+    /* ── NIT identity panel (right sidebar) ── */
+    .my-nit-card {
+      background: linear-gradient(140deg, #091525, #0f203a);
+      border-radius: 10px; padding: 1rem;
+      position: relative; overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .my-nit-card::before {
+      content: '';
+      position: absolute; inset: -1px; border-radius: 11px;
+      background: conic-gradient(from var(--angle,0deg), var(--cyan), var(--violet), var(--cyan));
+      z-index: -1;
+      animation: rotateBorder 5s linear infinite;
+    }
+    @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    @keyframes rotateBorder { to { --angle: 360deg; } }
+    .my-nit-card::after {
+      content: ''; position: absolute; inset: 1px; border-radius: 9px;
+      background: linear-gradient(140deg, #091525, #0f203a); z-index: -1;
+    }
+    .my-nit-logo { font-size: .6rem; font-weight: 700; letter-spacing: .18em; color: var(--cyan); margin-bottom: .6rem; }
+    .my-nit-logo span { color: var(--violet); }
+    .my-nit-id   { font-size: .78rem; font-weight: 600; color: var(--text); margin-bottom: .2rem; }
+    .my-nit-sub  { font-size: .5rem; color: var(--muted); letter-spacing: .06em; }
+    .my-nit-none { font-size: .6rem; color: var(--muted); text-align: center; padding: .5rem 0; line-height: 1.6; }
+    .my-nit-link {
+      display: inline-block; margin-top: .6rem;
+      font-size: .52rem; color: var(--cyan); letter-spacing: .12em;
+      text-decoration: none; border-bottom: 1px solid rgba(34,211,238,.3);
+      transition: border-color .2s;
+    }
+    .my-nit-link:hover { border-color: var(--cyan); }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav class="topnav">
+  <a href="/" class="nav-logo">NIT<span>-IN</span></a>
+  <div class="nav-links">
+    <a href="/"       class="nav-link">NETWORK</a>
+    <a href="/social" class="nav-link active">SOCIAL</a>
+    <a href="/onboard"class="nav-link">GENESIS</a>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="live-pill"><div class="live-dot"></div>LIVE FEED</div>
+</nav>
+
+<!-- ── Three-column shell ── -->
+<div class="shell">
+
+  <!-- ── Left sidebar ── -->
+  <aside class="sidebar-left">
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Network Status</div>
+      <div class="net-stats" id="net-stats">
+        <div class="net-stat"><span class="net-stat-label">Nodes online</span><span class="net-stat-val cyan" id="ns-online">—</span></div>
+        <div class="net-stat"><span class="net-stat-label">Edges</span><span class="net-stat-val" id="ns-edges">—</span></div>
+        <div class="net-stat"><span class="net-stat-label">Total posts</span><span class="net-stat-val" id="ns-posts">—</span></div>
+        <div class="net-stat"><span class="net-stat-label">Density</span><span class="net-stat-val violet" id="ns-density">—</span></div>
+        <div class="net-stat"><span class="net-stat-label">Feed rate</span><span class="net-stat-val green" id="ns-rate">— /min</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Filter</div>
+      <div class="filter-chips">
+        <button class="chip active" data-filter="ALL">ALL</button>
+        <button class="chip active SOCIAL_SIGNAL"    data-filter="SOCIAL_SIGNAL">SOCIAL</button>
+        <button class="chip active SENSOR_EVENT"     data-filter="SENSOR_EVENT">SENSOR</button>
+        <button class="chip active CAPABILITY_PULSE" data-filter="CAPABILITY_PULSE">PULSE</button>
+        <button class="chip active" data-filter="HUMAN_SIGNAL">HUMAN</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Online Nodes</div>
+      <div class="node-list" id="node-list"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main feed column ── -->
+  <main class="feed-col">
+
+    <div class="feed-header">
+      <div>
+        <div class="feed-title">The Living Feed</div>
+        <div class="feed-sub">Hardware-attested · No algorithm · Pure resonance</div>
+      </div>
+      <div class="feed-count" id="feed-count">0 posts</div>
+    </div>
+
+    <div class="loading-bar" id="loading-bar"></div>
+
+    <div class="new-toast" id="new-toast">↑ New posts — click to load</div>
+
+    <!-- Compose -->
+    <div class="compose-box" id="compose-box" style="display:none;">
+      <div class="compose-avatar" id="compose-avatar">?</div>
+      <div class="compose-right">
+        <textarea class="compose-input" id="compose-input" rows="2"
+          placeholder="Transmit a signal…"></textarea>
+        <div class="compose-footer">
+          <div class="compose-nit">Signing as <span id="compose-nit-id">—</span></div>
+          <button class="btn-post" id="btn-post">TRANSMIT ↯</button>
+        </div>
+        <div class="compose-hint">Your signal is <span>hardware-attested</span> by your NIT.</div>
+      </div>
+    </div>
+
+    <div id="feed-empty" class="feed-empty">
+      <div class="feed-empty-icon">◎</div>
+      <div class="feed-empty-txt">Waiting for the network…<br>nodes are waking up.</div>
+    </div>
+
+    <div class="post-stream" id="post-stream"></div>
+
+  </main>
+
+  <!-- ── Right sidebar ── -->
+  <aside class="sidebar-right">
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Your Token</div>
+      <div class="my-nit-card" id="my-nit-card">
+        <div class="my-nit-none" id="my-nit-none">
+          No token claimed yet.<br>
+          <a href="/onboard" class="my-nit-link">→ Claim yours</a>
+        </div>
+        <div id="my-nit-info" style="display:none;">
+          <div class="my-nit-logo">NIT<span>-IN</span></div>
+          <div class="my-nit-id"  id="my-nit-id">—</div>
+          <div class="my-nit-sub" id="my-nit-sub">—</div>
+          <a class="my-nit-link" id="my-nit-profile" href="#">→ View profile</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Post Frequency</div>
+      <canvas id="freq-canvas"></canvas>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Recent Activity</div>
+      <div class="activity-list" id="activity-list"></div>
+    </div>
+
+  </aside>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   NIT-IN Social Feed — Birth_Rights Protocol v1.0
+   Real-time hardware-attested stream. No algorithm. No ranking.
+═══════════════════════════════════════════════════════════════ */
+
+// ── State ─────────────────────────────────────────────────────────
+const state = {
+  posts:       [],
+  pendingPosts: [],
+  nodes:       [],
+  stats:       {},
+  myNit:       null,
+  filters:     new Set(['ALL', 'SOCIAL_SIGNAL', 'SENSOR_EVENT', 'CAPABILITY_PULSE', 'HUMAN_SIGNAL']),
+  postCounts:  new Array(30).fill(0),  // rolling 30-second buckets
+  lastMinute:  [],
+  feedRateInterval: null,
+};
+
+// ── Utils ─────────────────────────────────────────────────────────
+const el   = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function relTime(iso) {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 5)   return 'just now';
+  if (s < 60)  return `${s}s ago`;
+  if (s < 3600)return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+function initials(id) {
+  if (!id) return '?';
+  if (id.startsWith('NIT-USR')) return id.slice(-2);
+  if (id.startsWith('NIT-0'))   return id.slice(-3);
+  return id.slice(0, 2).toUpperCase();
+}
+
+function avatarClass(post) {
+  if (post.node_type === 'human' || post.type === 'HUMAN_SIGNAL') return 'human';
+  if (post.type === 'SENSOR_EVENT') return 'sensor';
+  return 'hw';
+}
+
+// ── My NIT (localStorage) ─────────────────────────────────────────
+function loadMyNit() {
+  try {
+    const raw = localStorage.getItem('nit_in_my_token');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) { return null; }
+}
+
+function saveMyNit(node) {
+  localStorage.setItem('nit_in_my_token', JSON.stringify({
+    node_id:   node.node_id,
+    name:      node.name,
+    hw_sig:    node.hw_sig,
+    node_type: node.node_type,
+    sensors:   node.capabilities?.sensors || [],
+  }));
+}
+
+function applyMyNit(nit) {
+  if (!nit) return;
+  state.myNit = nit;
+  el('my-nit-none').style.display   = 'none';
+  el('my-nit-info').style.display   = 'block';
+  el('my-nit-id').textContent       = nit.node_id;
+  el('my-nit-sub').textContent      = nit.name || nit.node_id;
+  el('my-nit-profile').href         = `/profile/${nit.node_id}`;
+
+  // Show compose box
+  const box = el('compose-box');
+  box.style.display = 'flex';
+  el('compose-avatar').textContent  = initials(nit.node_id);
+  el('compose-nit-id').textContent  = nit.node_id;
+}
+
+// ── Post rendering ────────────────────────────────────────────────
+function postBodyHtml(post) {
+  if (post.type === 'HUMAN_SIGNAL') {
+    return `<span class="human-text">${escHtml(post.msg || '')}</span>`;
+  }
+  if (post.type === 'SOCIAL_SIGNAL') {
+    return `<span class="label">SYNC REQUEST →</span><span class="val">${post.to || '?'}</span>` +
+      (post.msg ? ` <span class="label">msg</span><span class="val">${post.msg}</span>` : '') +
+      (post.resonance_score != null
+        ? `<div class="post-meter">
+             <span class="meter-label">RESONANCE</span>
+             <div class="meter-track"><div class="meter-fill" style="width:${Math.round(post.resonance_score*100)}%;background:var(--cyan);"></div></div>
+             <span class="meter-val">${post.resonance_score?.toFixed ? post.resonance_score.toFixed(2) : post.resonance_score}</span>
+           </div>` : '');
+  }
+  if (post.type === 'SENSOR_EVENT') {
+    const pct = post.confidence != null ? Math.round(post.confidence * 100) : null;
+    return `<span class="label">SENSOR</span><span class="val orange">${post.sensor || '—'}</span>` +
+      (post.delta != null ? ` <span class="label">Δ</span><span class="val orange">${post.delta}</span>` : '') +
+      (pct != null
+        ? `<div class="post-meter">
+             <span class="meter-label">CONFIDENCE</span>
+             <div class="meter-track"><div class="meter-fill" style="width:${pct}%;background:var(--orange);"></div></div>
+             <span class="meter-val">${pct}%</span>
+           </div>` : '');
+  }
+  if (post.type === 'CAPABILITY_PULSE') {
+    const sensors = post.sensors || post.capabilities?.sensors || [];
+    return `<span class="label">CAPABILITY PULSE</span>` +
+      (sensors.length
+        ? `<span class="val violet">${sensors.join(', ')}</span>`
+        : `<span class="val">${post.node_id}</span>`) +
+      (post.free_mem != null
+        ? ` <span class="label">mem</span><span class="val">${post.free_mem}b</span>` : '');
+  }
+  return `<span class="val">${escHtml(JSON.stringify(post).slice(0, 80))}</span>`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function shouldShow(post) {
+  if (state.filters.has('ALL')) return true;
+  return state.filters.has(post.type || '');
+}
+
+function makePostCard(post, prepend = false) {
+  if (!shouldShow(post)) return null;
+
+  const div = document.createElement('div');
+  const cls = post.type === 'HUMAN_SIGNAL' ? 'human-post' : (post.type || '');
+  const remoteClass = post.remote_hub ? ' remote' : '';
+  div.className = `post-card ${cls}${remoteClass}`;
+  if (prepend) div.style.animation = 'slideIn .35s ease';
+
+  const avCls  = avatarClass(post);
+  const avInit = initials(post.node_id);
+  const badge  = post.type === 'HUMAN_SIGNAL' ? 'HUMAN_SIGNAL' : (post.type || 'POST');
+
+  // Remote hub badge
+  const remoteBadgeHtml = post.remote_hub
+    ? `<span class="remote-hub-badge"><span class="remote-hub-dot"></span>HUB·${post.remote_hub.slice(0,6)}</span>`
+    : '';
+
+  // Resonance chain indicator
+  const chainHtml = (post.type === 'SOCIAL_SIGNAL' && post.resonance_score >= 0.6)
+    ? `<div class="resonance-chain">
+         ◈ RESONANCE CHAIN ESTABLISHED · ${post.node_id} ↔ ${post.to || '?'}
+         <span class="chain-score">score ${post.resonance_score?.toFixed(2)}</span>
+       </div>` : '';
+
+  div.innerHTML = `
+    <div class="post-header">
+      <div class="post-avatar ${avCls}">${avInit}</div>
+      <div class="post-meta">
+        <div class="post-nit"><a href="/profile/${post.node_id}">${post.node_id}</a></div>
+        <div class="post-node-sub">${post.node_type === 'human' ? 'HUMAN NODE' : 'HARDWARE NODE'}</div>
+      </div>
+      <span class="post-badge ${badge}">${badge.replace('_', ' ')}</span>${remoteBadgeHtml}
+      <span class="post-ts">${relTime(post.timestamp)}</span>
+    </div>
+    <div class="post-body">${postBodyHtml(post)}</div>
+    ${chainHtml}
+    <div class="post-actions">
+      <button class="action-btn resonate" title="Resonate">↯ <span class="count">RESONATE</span></button>
+      <button class="action-btn observe"  title="Observe">◎ <span class="count">OBSERVE</span></button>
+      <button class="action-btn signal"   title="Signal">⬡ <span class="count">SIGNAL</span></button>
+    </div>
+  `;
+
+  return div;
+}
+
+// ── Render full feed ──────────────────────────────────────────────
+function renderFeed() {
+  const stream = el('post-stream');
+  stream.innerHTML = '';
+  const visible = state.posts.filter(shouldShow);
+
+  if (!visible.length) {
+    el('feed-empty').style.display = 'flex';
+    return;
+  }
+  el('feed-empty').style.display = 'none';
+
+  for (const post of visible) {
+    const card = makePostCard(post);
+    if (card) stream.appendChild(card);
+  }
+
+  el('feed-count').textContent = `${visible.length} post${visible.length !== 1 ? 's' : ''}`;
+}
+
+// ── Prepend new post ──────────────────────────────────────────────
+function prependPost(post) {
+  // Track for frequency chart
+  state.lastMinute.push(Date.now());
+  state.lastMinute = state.lastMinute.filter(t => Date.now() - t < 60000);
+
+  const scrollTop = window.scrollY;
+  const atTop     = scrollTop < 80;
+
+  if (atTop) {
+    el('feed-empty').style.display = 'none';
+    const stream = el('post-stream');
+    const card = makePostCard(post, true);
+    if (card) stream.prepend(card);
+    state.posts.unshift(post);
+    const count = state.posts.filter(shouldShow).length;
+    el('feed-count').textContent = `${count} post${count !== 1 ? 's' : ''}`;
+  } else {
+    state.pendingPosts.unshift(post);
+    state.posts.unshift(post);
+    const toast = el('new-toast');
+    toast.textContent = `↑ ${state.pendingPosts.length} new post${state.pendingPosts.length > 1 ? 's' : ''} — click to load`;
+    toast.classList.add('show');
+  }
+
+  // Activity sidebar
+  addActivity(post);
+}
+
+el('new-toast').addEventListener('click', () => {
+  state.pendingPosts = [];
+  el('new-toast').classList.remove('show');
+  renderFeed();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ── Activity sidebar ──────────────────────────────────────────────
+function addActivity(post) {
+  const list = el('activity-list');
+  const item = document.createElement('div');
+  const cls  = post.type === 'SOCIAL_SIGNAL'  ? 'resonate'
+             : post.type === 'SENSOR_EVENT'    ? 'sensor'
+             : 'genesis';
+
+  const txt = post.type === 'SOCIAL_SIGNAL'
+    ? `${post.node_id} resonated with ${post.to || '?'}`
+    : post.type === 'SENSOR_EVENT'
+    ? `${post.node_id} fired ${post.sensor || 'sensor'}`
+    : post.type === 'HUMAN_SIGNAL'
+    ? `${post.node_id} transmitted`
+    : `${post.node_id} pulsed`;
+
+  item.className = `activity-item ${cls}`;
+  item.innerHTML = `<div class="activity-item-text">${txt}</div>
+                    <div class="activity-item-ts">${relTime(post.timestamp)}</div>`;
+  list.prepend(item);
+  while (list.children.length > 8) list.lastChild.remove();
+}
+
+// ── Network stats ─────────────────────────────────────────────────
+function updateStats(stats) {
+  if (!stats) return;
+  el('ns-online').textContent  = stats.online_nodes  || '—';
+  el('ns-edges').textContent   = stats.total_edges   || '—';
+  el('ns-posts').textContent   = stats.total_posts   || '—';
+  el('ns-density').textContent = stats.network_density != null
+    ? (stats.network_density * 100).toFixed(1) + '%' : '—';
+}
+
+function updateFeedRate() {
+  const recent = state.lastMinute.filter(t => Date.now() - t < 60000).length;
+  el('ns-rate').textContent = `${recent} /min`;
+}
+
+// ── Node list sidebar ─────────────────────────────────────────────
+function renderNodeList(nodes) {
+  const list = el('node-list');
+  list.innerHTML = '';
+  const online = nodes.filter(n => n.online).slice(0, 14);
+  for (const n of online) {
+    const a = document.createElement('a');
+    a.className = 'node-pill';
+    a.href = `/profile/${n.id || n.node_id}`;
+    const isHuman = n.node_type === 'human';
+    a.innerHTML = `
+      <div class="np-dot ${isHuman ? 'human' : ''}"></div>
+      <div class="np-id">${n.id || n.node_id}</div>
+      <div class="np-conns">${n.connections || 0}↯</div>
+    `;
+    list.appendChild(a);
+  }
+}
+
+// ── Frequency chart ───────────────────────────────────────────────
+function drawFreqChart() {
+  const c   = el('freq-canvas');
+  if (!c) return;
+  const W   = c.parentElement.clientWidth || 220;
+  c.width   = W; c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, 80);
+
+  // Build 30 buckets of 2s each (last 60s)
+  const now     = Date.now();
+  const buckets = new Array(30).fill(0);
+  for (const ts of state.lastMinute) {
+    const age = Math.floor((now - ts) / 2000);
+    if (age < 30) buckets[29 - age]++;
+  }
+
+  const maxV = Math.max(...buckets, 1);
+  const bw   = W / 30;
+
+  for (let i = 0; i < 30; i++) {
+    const h = Math.round((buckets[i] / maxV) * 60) + 2;
+    const x = i * bw;
+    const g = ctx.createLinearGradient(0, 80 - h, 0, 80);
+    g.addColorStop(0, 'rgba(34,211,238,.8)');
+    g.addColorStop(1, 'rgba(34,211,238,.15)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x + 1, 80 - h, bw - 2, h);
+  }
+  requestAnimationFrame(drawFreqChart);
+}
+
+// ── Filter chips ──────────────────────────────────────────────────
+for (const chip of document.querySelectorAll('.chip')) {
+  chip.addEventListener('click', () => {
+    const f = chip.dataset.filter;
+    if (f === 'ALL') {
+      // Toggle all
+      const allOn = state.filters.has('ALL');
+      if (allOn) {
+        state.filters.clear();
+        chip.classList.remove('active');
+      } else {
+        state.filters = new Set(['ALL', 'SOCIAL_SIGNAL', 'SENSOR_EVENT', 'CAPABILITY_PULSE', 'HUMAN_SIGNAL']);
+        document.querySelectorAll('.chip').forEach(c => c.classList.add('active'));
+      }
+    } else {
+      if (state.filters.has(f)) {
+        state.filters.delete(f);
+        chip.classList.remove('active');
+      } else {
+        state.filters.add(f);
+        chip.classList.add('active');
+      }
+    }
+    renderFeed();
+  });
+}
+
+// ── Compose / transmit ────────────────────────────────────────────
+el('btn-post').addEventListener('click', async () => {
+  if (!state.myNit) return;
+  const text = el('compose-input').value.trim();
+  if (!text) return;
+
+  el('btn-post').disabled = true;
+
+  // Inject as a HUMAN_SIGNAL post locally (optimistic)
+  const post = {
+    node_id:   state.myNit.node_id,
+    node_type: 'human',
+    type:      'HUMAN_SIGNAL',
+    msg:       text,
+    timestamp: new Date().toISOString(),
+    id:        `human-${Date.now()}`,
+  };
+
+  // Also POST to server so it persists in registry feed
+  try {
+    await fetch('/api/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: state.myNit.node_id, msg: text }),
+    });
+  } catch (_) {}
+
+  el('compose-input').value = '';
+  el('btn-post').disabled = false;
+  prependPost(post);
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────
+function connectWS() {
+  const ws = new WebSocket(`ws://${window.location.host}`);
+
+  ws.onmessage = ({ data }) => {
+    try {
+      const { event, data: d } = JSON.parse(data);
+
+      if (event === 'init') {
+        state.posts = d.feed || [];
+        state.nodes = d.graph?.nodes || [];
+        updateStats(d.stats);
+        renderNodeList(state.nodes);
+        renderFeed();
+        el('loading-bar').style.display = 'none';
+        // Try to detect user's NIT from nodes list
+        if (!state.myNit) {
+          const human = state.nodes.find(n => n.node_type === 'human');
+          if (human) applyMyNit(human);
+        }
+      }
+
+      if (event === 'feed:post') {
+        prependPost(d);
+      }
+
+      if (event === 'node:registered') {
+        state.nodes.push(d.node);
+        renderNodeList(state.nodes);
+        // Check if this is my node
+        if (d.node?.node_type === 'human' && !state.myNit) {
+          applyMyNit(d.node);
+          saveMyNit(d.node);
+        }
+      }
+
+      if (event === 'node:pulse') {
+        updateStats(d.stats || state.stats);
+      }
+
+    } catch (_) {}
+  };
+
+  ws.onopen  = () => { el('loading-bar').style.display = 'block'; };
+  ws.onclose = () => setTimeout(connectWS, 2500);
+}
+
+// ── Human signal API (server-side) ───────────────────────────────
+// Server needs to accept /api/signal — it will add to registry feed and broadcast
+// (gracefully degraded if not available)
+
+// ── Init ─────────────────────────────────────────────────────────
+async function init() {
+  // Load my NIT from localStorage
+  const myNit = loadMyNit();
+  if (myNit) applyMyNit(myNit);
+
+  // Fetch initial feed via HTTP (faster than waiting for WS init)
+  try {
+    const [feedRes, statsRes, graphRes] = await Promise.all([
+      fetch('/api/feed?limit=80'),
+      fetch('/api/stats'),
+      fetch('/api/graph'),
+    ]);
+    state.posts = await feedRes.json();
+    state.stats = await statsRes.json();
+    const graph = await graphRes.json();
+    state.nodes = graph.nodes || [];
+    updateStats(state.stats);
+    renderNodeList(state.nodes);
+    renderFeed();
+    el('loading-bar').style.display = 'none';
+
+    // If my NIT not from localStorage, check nodes
+    if (!state.myNit) {
+      const human = state.nodes.find(n => n.node_type === 'human');
+      if (human) applyMyNit(human);
+    }
+  } catch (_) {}
+
+  connectWS();
+  drawFreqChart();
+  setInterval(updateFeedRate, 5000);
+
+  // Update relative times every 30s
+  setInterval(() => {
+    document.querySelectorAll('.post-ts').forEach(el => {
+      const iso = el.dataset.ts;
+      if (iso) el.textContent = relTime(iso);
+    });
+  }, 30000);
+}
+
+init();
+</script>
+</body>
+</html>

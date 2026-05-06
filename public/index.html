@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIT-IN — Node Identity Network</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #020617;
+      --surface:   #0f172a;
+      --border:    #1e3a5f;
+      --cyan:      #22d3ee;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --amber:     #fbbf24;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --danger:    #f87171;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 2px;
+    }
+    .logo span { color: var(--purple); }
+    .ws-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .ws-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      margin-left: auto;
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--cyan);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 9px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+    .mode-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: rgba(167,139,250,0.15);
+      color: var(--purple);
+      border: 1px solid rgba(167,139,250,0.3);
+    }
+
+    /* ── Nav tabs ── */
+    nav {
+      display: flex;
+      gap: 2px;
+      padding: 8px 20px 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 6px 16px 8px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+    /* ── Main area ── */
+    main {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    .tab-panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+      overflow: hidden;
+    }
+    .tab-panel.active { display: flex; }
+
+    /* ── NETWORK tab ── */
+    #tab-network { flex-direction: row; }
+    #graph-svg {
+      flex: 1;
+      display: block;
+    }
+    .graph-sidebar {
+      width: 260px;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sidebar-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .reaction-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+    }
+    .reaction-card .new-nit {
+      color: var(--cyan);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .reaction-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+    .r-RESONATE { color: var(--cyan);   }
+    .r-OBSERVE  { color: var(--amber);  }
+    .r-DEFER    { color: var(--muted);  }
+    .r-IGNORE   { color: #334155;       }
+    .score-pill {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── NODES tab ── */
+    #tab-nodes {
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .nodes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .node-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      transition: border-color 0.3s;
+    }
+    .node-card.online  { border-left: 3px solid var(--cyan); }
+    .node-card.offline { border-left: 3px solid var(--muted); opacity: 0.6; }
+    .node-card.new-flash { animation: cardFlash 1s ease-out; }
+    @keyframes cardFlash {
+      0%   { background: rgba(34,211,238,0.15); }
+      100% { background: var(--surface); }
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .card-nit-id {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .status-dot.online  { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .status-dot.offline { background: var(--muted); }
+    .card-hw {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .sensors {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .sensor-pill {
+      background: rgba(34,211,238,0.08);
+      border: 1px solid rgba(34,211,238,0.2);
+      color: var(--cyan);
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: 9px;
+    }
+    .mem-bar-wrap {
+      margin-bottom: 6px;
+    }
+    .mem-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .mem-bar {
+      height: 3px;
+      background: #1e293b;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .mem-bar-fill {
+      height: 100%;
+      background: var(--cyan);
+      transition: width 0.5s ease;
+    }
+    .card-stats {
+      display: flex;
+      gap: 12px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .card-stats span { color: var(--text); }
+
+    /* ── FEED tab ── */
+    #tab-feed {
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .feed-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 16px;
+    }
+    .feed-item {
+      display: flex;
+      gap: 12px;
+      align-items: baseline;
+      padding: 6px 8px;
+      border-radius: 4px;
+      animation: fadeIn 0.4s ease-out;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .feed-item:hover { background: rgba(255,255,255,0.03); }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .feed-time  { color: var(--muted); font-size: 10px; width: 68px; flex-shrink: 0; }
+    .feed-node  { color: var(--cyan);  font-weight: 700; width: 80px; flex-shrink: 0; }
+    .feed-type  { font-size: 10px; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
+    .type-SENSOR_EVENT   { background: rgba(52,211,153,0.12);  color: var(--green);  }
+    .type-SOCIAL_SIGNAL  { background: rgba(167,139,250,0.12); color: var(--purple); }
+    .type-CAPABILITY_PULSE { background: rgba(100,116,139,0.12); color: var(--muted); }
+    .feed-body  { color: var(--text); font-size: 11px; }
+
+    /* ── D3 graph elements ── */
+    .node circle { cursor: grab; }
+    .node circle:active { cursor: grabbing; }
+    .node text { pointer-events: none; fill: #94a3b8; font-size: 9px; }
+    .links line { stroke-opacity: 0.5; }
+
+    /* ── Scrollbars ── */
+    ::-webkit-scrollbar       { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">NIT<span>-IN</span></div>
+  <div class="ws-dot" id="ws-dot"></div>
+  <div class="mode-badge" id="mode-badge">CONNECTING…</div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-value" id="stat-nodes">0</div>
+      <div class="stat-label">ONLINE</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-edges">0</div>
+      <div class="stat-label">CONNECTIONS</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-posts">0</div>
+      <div class="stat-label">POSTS</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-density">0.000</div>
+      <div class="stat-label">DENSITY</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Tabs ───────────────────────────────────────────────────── -->
+<nav>
+  <button class="tab-btn active" onclick="switchTab('network')">◈ Network</button>
+  <button class="tab-btn"        onclick="switchTab('nodes')">⬡ Nodes</button>
+  <button class="tab-btn"        onclick="switchTab('feed')">✦ Feed</button>
+  <button class="tab-btn"        onclick="switchTab('peers')">⟡ Peers</button>
+  <a class="tab-btn" href="/social"  style="text-decoration:none;">↯ Social</a>
+  <a class="tab-btn" href="/onboard" style="text-decoration:none;">◉ Genesis</a>
+</nav>
+
+<!-- ── NETWORK TAB ────────────────────────────────────────────── -->
+<main>
+  <div class="tab-panel active" id="tab-network">
+    <svg id="graph-svg"></svg>
+    <aside class="graph-sidebar">
+      <div class="sidebar-title">Network Reactions</div>
+      <div id="reactions-list"></div>
+    </aside>
+  </div>
+
+  <!-- ── NODES TAB ──────────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-nodes">
+    <div class="nodes-grid" id="nodes-grid"></div>
+  </div>
+
+  <!-- ── FEED TAB ───────────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-feed">
+    <div class="feed-list" id="feed-list"></div>
+  </div>
+
+  <!-- ── PEERS TAB ─────────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-peers">
+    <div id="peers-panel" style="padding:16px;overflow-y:auto;width:100%">
+      <div id="peers-content" style="color:#64748b;font-size:12px">Loading federation peers…</div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────
+const state = {
+  nodes: {},    // node_id -> node
+  edges: [],    // [{source,target,resonance_score}]
+  feedCount: 0,
+};
+
+// ── Tab switching ─────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if (b.textContent.toLowerCase().includes(name)) b.classList.add('active');
+  });
+  if (name === 'network') restartSim();
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────
+const ws = new WebSocket(`ws://${window.location.host}`);
+const dot = document.getElementById('ws-dot');
+
+ws.onopen = () => dot.classList.add('connected');
+ws.onclose = () => dot.classList.remove('connected');
+
+ws.onmessage = evt => {
+  const { event, data } = JSON.parse(evt.data);
+  switch (event) {
+    case 'init':             handleInit(data);           break;
+    case 'node:registered':  handleNodeRegistered(data); break;
+    case 'node:pulse':       handleNodePulse(data);      break;
+    case 'node:offline':     handleNodeOffline(data);    break;
+    case 'feed:post':        handleFeedPost(data);       break;
+  }
+};
+
+function handleInit({ nodes, graph, feed, stats, mode }) {
+  document.getElementById('mode-badge').textContent =
+    (mode === 'sim' ? 'SIM' : 'HARDWARE') + ' MODE';
+
+  nodes.forEach(n => { state.nodes[n.node_id] = n; });
+  state.edges = graph.edges || [];
+
+  refreshStats(stats);
+  rebuildNodesGrid();
+  feed.slice().reverse().forEach(p => prependFeedItem(p));
+  updateGraph();
+}
+
+function handleNodeRegistered({ node, reactions }) {
+  state.nodes[node.node_id] = node;
+
+  // Add any new edges that formed via RESONATE
+  reactions
+    .filter(r => r.reaction === 'RESONATE')
+    .forEach(r => {
+      const key = [r.from, r.to].sort().join(':');
+      if (!state.edges.find(e => [e.source, e.target].sort().join(':') === key)) {
+        state.edges.push({ source: r.from, target: r.to, resonance_score: r.score });
+      }
+    });
+
+  upsertNodeCard(node, true);
+  appendReactionCard(node.node_id, reactions);
+  updateGraph();
+  refreshStatsFromState();
+}
+
+function handleNodePulse({ node_id, uptime, free_mem }) {
+  if (state.nodes[node_id]) {
+    state.nodes[node_id].uptime   = uptime;
+    state.nodes[node_id].free_mem = free_mem;
+    updateNodeCard(node_id);
+  }
+}
+
+function handleNodeOffline({ node_id }) {
+  if (state.nodes[node_id]) {
+    state.nodes[node_id].online = false;
+    updateNodeCard(node_id);
+    updateGraph();
+  }
+}
+
+function handleFeedPost(post) {
+  // Update post_count on node
+  if (state.nodes[post.node_id]) state.nodes[post.node_id].post_count++;
+  prependFeedItem(post);
+  state.feedCount++;
+  refreshStatsFromState();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────
+function refreshStats(s) {
+  document.getElementById('stat-nodes').textContent   = s.online_nodes   ?? 0;
+  document.getElementById('stat-edges').textContent   = s.total_edges    ?? 0;
+  document.getElementById('stat-posts').textContent   = s.total_posts    ?? 0;
+  document.getElementById('stat-density').textContent = s.network_density ?? '0.000';
+}
+
+function refreshStatsFromState() {
+  const nodes    = Object.values(state.nodes);
+  const online   = nodes.filter(n => n.online).length;
+  const n        = nodes.length;
+  const edges    = state.edges.length;
+  const density  = n > 1 ? (2 * edges / (n * (n - 1))).toFixed(3) : '0.000';
+  const posts    = nodes.reduce((s, x) => s + (x.post_count || 0), 0);
+  refreshStats({ online_nodes: online, total_edges: edges, total_posts: posts, network_density: density });
+}
+
+// ── Nodes grid ────────────────────────────────────────────────────
+function rebuildNodesGrid() {
+  const grid = document.getElementById('nodes-grid');
+  grid.innerHTML = '';
+  Object.values(state.nodes).forEach(n => upsertNodeCard(n, false));
+}
+
+function upsertNodeCard(node, isNew) {
+  const grid    = document.getElementById('nodes-grid');
+  let card      = document.getElementById(`card-${node.node_id}`);
+  const created = !card;
+
+  if (created) {
+    card = document.createElement('div');
+    card.id = `card-${node.node_id}`;
+    card.className = 'node-card';
+    grid.appendChild(card);
+  }
+
+  if (isNew) card.classList.add('new-flash');
+  _renderCard(card, node);
+  if (created || !isNew) return;
+  setTimeout(() => card.classList.remove('new-flash'), 1100);
+}
+
+function updateNodeCard(node_id) {
+  const card = document.getElementById(`card-${node_id}`);
+  if (card && state.nodes[node_id]) _renderCard(card, state.nodes[node_id]);
+}
+
+function _renderCard(card, n) {
+  const online  = n.online !== false;
+  const maxMem  = n.capabilities?.sram_bytes || 2048;
+  const freeMem = n.free_mem || maxMem;
+  const pct     = Math.round((freeMem / maxMem) * 100);
+  const sensors = (n.capabilities?.sensors || n.sensors || [])
+    .map(s => `<span class="sensor-pill">${s}</span>`).join('');
+  const uptime  = n.uptime ? `${n.uptime}s` : '—';
+
+  card.className = `node-card ${online ? 'online' : 'offline'}`;
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="card-nit-id">${n.node_id}</div>
+      <div class="status-dot ${online ? 'online' : 'offline'}"></div>
+    </div>
+    <div class="card-hw">hw: ${(n.hardware_sig || '').slice(0, 12)}</div>
+    <div class="sensors">${sensors}</div>
+    <div class="mem-bar-wrap">
+      <div class="mem-label">
+        <span>SRAM</span>
+        <span>${freeMem}/${maxMem}b</span>
+      </div>
+      <div class="mem-bar">
+        <div class="mem-bar-fill" style="width:${pct}%"></div>
+      </div>
+    </div>
+    <div class="card-stats">
+      <div>⇌ <span>${(n.connections || []).length}</span></div>
+      <div>✦ <span>${n.post_count || 0}</span> posts</div>
+      <div>⏱ <span>${uptime}</span></div>
+    </div>
+  `;
+}
+
+// ── Feed ──────────────────────────────────────────────────────────
+const FEED_MAX_ITEMS = 200;
+
+function prependFeedItem(post) {
+  const list = document.getElementById('feed-list');
+  const atTop = list.scrollTop < 40;
+
+  const div = document.createElement('div');
+  div.className = 'feed-item';
+
+  const ts   = new Date(post.timestamp || Date.now());
+  const time = ts.toLocaleTimeString('en-US', { hour12: false });
+  const type = post.type || 'UNKNOWN';
+  const body = _formatPostBody(post);
+
+  div.innerHTML = `
+    <span class="feed-time">${time}</span>
+    <span class="feed-node">${post.node_id}</span>
+    <span class="feed-type type-${type}">${type.replace('_', ' ')}</span>
+    <span class="feed-body">${body}</span>
+  `;
+
+  list.prepend(div);
+
+  // Trim old items
+  while (list.children.length > FEED_MAX_ITEMS) list.lastChild.remove();
+
+  if (atTop) list.scrollTop = 0;
+}
+
+function _formatPostBody(post) {
+  if (post.type === 'SENSOR_EVENT') {
+    return `${post.sensor} → <b>${post.value}</b>  conf:${post.confidence}`;
+  }
+  if (post.type === 'SOCIAL_SIGNAL') {
+    return `→ ${post.to}  <b>${post.msg || 'SIGNAL'}</b>  score:${post.resonance_score}`;
+  }
+  if (post.type === 'CAPABILITY_PULSE') {
+    return `uptime:${post.uptime}s  mem:${post.free_mem}b`;
+  }
+  return JSON.stringify(post).slice(0, 80);
+}
+
+// ── Reaction sidebar ──────────────────────────────────────────────
+const MAX_REACTION_CARDS = 8;
+
+function appendReactionCard(nit_id, reactions) {
+  const list = document.getElementById('reactions-list');
+  const card = document.createElement('div');
+  card.className = 'reaction-card';
+
+  const counts = { RESONATE: 0, OBSERVE: 0, DEFER: 0, IGNORE: 0 };
+  reactions.forEach(r => { counts[r.reaction] = (counts[r.reaction] || 0) + 1; });
+
+  const rows = Object.entries(counts)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => {
+      const avg = reactions
+        .filter(r => r.reaction === k)
+        .reduce((s, r) => s + r.score, 0) / v;
+      return `<div class="reaction-row">
+        <span class="r-${k}">${k} ×${v}</span>
+        <span class="score-pill">${avg.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+
+  card.innerHTML = `<div class="new-nit">◈ ${nit_id} joined</div>${rows}`;
+  list.prepend(card);
+
+  while (list.children.length > MAX_REACTION_CARDS) list.lastChild.remove();
+}
+
+// ── D3 Force Graph ────────────────────────────────────────────────
+const svg = d3.select('#graph-svg');
+const g   = svg.append('g');
+const COLORS = { online: '#22d3ee', offline: '#475569', edge: '#1e3a5f' };
+
+svg.call(
+  d3.zoom().scaleExtent([0.2, 4])
+    .on('zoom', e => g.attr('transform', e.transform))
+);
+
+let linkSel = g.append('g').attr('class', 'links').selectAll('line');
+let nodeSel = g.append('g').attr('class', 'nodes').selectAll('g');
+
+const simulation = d3.forceSimulation()
+  .force('link',      d3.forceLink().id(d => d.id).distance(90).strength(0.4))
+  .force('charge',    d3.forceManyBody().strength(-180))
+  .force('collision', d3.forceCollide(28))
+  .force('x',         d3.forceX().strength(0.05))
+  .force('y',         d3.forceY().strength(0.05));
+
+function restartSim() {
+  const svgEl = document.getElementById('graph-svg');
+  const cx = svgEl.clientWidth  / 2;
+  const cy = svgEl.clientHeight / 2;
+  simulation.force('center', d3.forceCenter(cx, cy));
+  simulation.alpha(0.1).restart();
+}
+
+function updateGraph() {
+  const nodesArr = Object.values(state.nodes).map(n => ({
+    id:          n.node_id,
+    online:      n.online !== false,
+    connections: (n.connections || []).length,
+    post_count:  n.post_count || 0,
+  }));
+
+  // Merge positions from existing simulation nodes
+  const posMap = {};
+  simulation.nodes().forEach(d => { posMap[d.id] = { x: d.x, y: d.y, vx: d.vx, vy: d.vy }; });
+  nodesArr.forEach(d => {
+    if (posMap[d.id]) Object.assign(d, posMap[d.id]);
+  });
+
+  const linksArr = state.edges.map(e => ({
+    source:          e.source?.id || e.source,
+    target:          e.target?.id || e.target,
+    resonance_score: e.resonance_score || 0.5,
+  }));
+
+  // Links
+  linkSel = linkSel.data(linksArr, d => `${d.source}-${d.target}`);
+  linkSel.exit().remove();
+  linkSel = linkSel.enter().append('line')
+    .attr('stroke', COLORS.edge)
+    .attr('stroke-width', d => Math.max(0.5, (d.resonance_score || 0.5) * 2.5))
+    .merge(linkSel);
+
+  // Nodes
+  nodeSel = nodeSel.data(nodesArr, d => d.id);
+  nodeSel.exit().remove();
+
+  const entered = nodeSel.enter().append('g').attr('class', 'node')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end',   (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+    );
+
+  entered.append('circle').attr('fill', '#0f172a').attr('stroke-width', 1.5);
+  entered.append('text').attr('dy', 26).attr('text-anchor', 'middle');
+
+  nodeSel = entered.merge(nodeSel);
+
+  nodeSel.select('circle')
+    .attr('r',      d => 10 + d.connections * 1.5)
+    .attr('stroke', d => d.online ? COLORS.online : COLORS.offline);
+
+  nodeSel.select('text').text(d => d.id);
+
+  simulation.nodes(nodesArr);
+  simulation.force('link').links(linksArr);
+  simulation.alpha(0.4).restart();
+}
+
+simulation.on('tick', () => {
+  linkSel
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+});
+
+// Center graph on window resize
+window.addEventListener('resize', restartSim);
+
+// ── Peers tab ─────────────────────────────────────────────────────
+async function loadPeers() {
+  try {
+    const net = await fetch('/api/network').then(r => r.json());
+    const peers = net.peers || [];
+    const el = document.getElementById('peers-content');
+    if (!peers.length) {
+      el.innerHTML = `<div style="text-align:center;padding:40px;color:#64748b">
+        <div style="font-size:24px;margin-bottom:12px">⟡</div>
+        <div>No peer hubs discovered yet.</div>
+        <div style="font-size:10px;margin-top:6px">Start another NIT-IN hub on the same LAN — they will find each other automatically.</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:12px;color:#22d3ee;font-size:10px;letter-spacing:1.5px">THIS HUB: ${net.hub_id} — ${peers.length} PEER${peers.length!==1?'S':''} DISCOVERED</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+        ${peers.map(p => `
+          <div style="background:#0f172a;border:1px solid ${p.connected?'rgba(34,211,238,.2)':'rgba(100,116,139,.15)'};border-radius:8px;padding:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="width:7px;height:7px;border-radius:50%;background:${p.connected?'#4ade80':'#64748b'};${p.connected?'box-shadow:0 0 4px #4ade80':''}"></div>
+              <span style="color:#22d3ee;font-weight:700;font-size:12px">${p.hub_id}</span>
+            </div>
+            <div style="color:#94a3b8;font-size:10px;margin-bottom:4px">${p.name || 'Unknown Hub'}</div>
+            <div style="color:#475569;font-size:10px">${p.ws_url}</div>
+            <div style="color:#475569;font-size:10px;margin-top:6px">Last: ${p.last_seen ? new Date(p.last_seen).toLocaleTimeString() : '—'}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('peers-content').textContent = 'Error loading peers: ' + e.message;
+  }
+}
+
+// Hook peers tab load
+const _origSwitchTab = switchTab;
+function switchTab(name) {
+  _origSwitchTab(name);
+  if (name === 'peers') loadPeers();
+}
+</script>
+</body>
+</html>

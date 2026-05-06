@@ -1,0 +1,7 @@
+node_modules/
+data/nit.db
+data/nit.db-shm
+data/nit.db-wal
+data/*.db
+.env
+*.env

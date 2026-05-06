@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT Genesis — Birth_Rights Protocol v1.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #020617;
+      --bg2:     #0a1628;
+      --bg3:     #0f1f3a;
+      --cyan:    #22d3ee;
+      --violet:  #a78bfa;
+      --green:   #4ade80;
+      --gold:    #fbbf24;
+      --red:     #f87171;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --border:  rgba(34, 211, 238, 0.18);
+      --font:    'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    /* ── Particle canvas ── */
+    #canvas-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── Phase wrappers ── */
+    .phase {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.55s ease;
+    }
+    .phase.hidden  { opacity: 0; pointer-events: none; }
+    .phase.gone    { display: none; }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 0 — SPLASH
+    ══════════════════════════════════════════════════ */
+    #phase-splash { flex-direction: column; gap: 1rem; text-align: center; }
+
+    .splash-logo {
+      font-size: clamp(3rem, 10vw, 5.5rem);
+      font-weight: 700;
+      letter-spacing: 0.35em;
+      color: var(--cyan);
+      text-shadow: 0 0 30px rgba(34,211,238,.6), 0 0 70px rgba(34,211,238,.3);
+      animation: logoPulse 2.2s ease-in-out infinite alternate;
+    }
+    @keyframes logoPulse {
+      from { text-shadow: 0 0 30px rgba(34,211,238,.6), 0 0 70px rgba(34,211,238,.3); }
+      to   { text-shadow: 0 0 55px rgba(34,211,238,.9), 0 0 110px rgba(34,211,238,.5), 0 0 160px rgba(167,139,250,.35); }
+    }
+
+    .splash-sub {
+      font-size: clamp(0.55rem, 1.5vw, 0.75rem);
+      letter-spacing: 0.55em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .splash-bar {
+      width: 220px;
+      height: 2px;
+      background: var(--bg2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 1.5rem auto 0;
+    }
+    .splash-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--violet));
+      width: 0%;
+      animation: fillBar 1.6s ease forwards 0.4s;
+    }
+    @keyframes fillBar { to { width: 100%; } }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 1 — IDENTITY INPUT
+    ══════════════════════════════════════════════════ */
+    #phase-input { padding: 2rem; }
+    .input-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+      align-items: center;
+      text-align: center;
+      max-width: 520px;
+    }
+
+    .eyebrow {
+      font-size: 0.62rem;
+      letter-spacing: 0.6em;
+      color: var(--violet);
+      text-transform: uppercase;
+    }
+
+    .input-headline {
+      font-size: clamp(1.25rem, 4vw, 2.1rem);
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .input-headline em { font-style: normal; color: var(--cyan); }
+
+    .input-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .name-wrap {
+      position: relative;
+      width: min(460px, 88vw);
+    }
+    .name-input {
+      width: 100%;
+      padding: 1rem 1.4rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 1.05rem;
+      letter-spacing: 0.05em;
+      outline: none;
+      transition: border-color .3s, box-shadow .3s;
+    }
+    .name-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(34,211,238,.1), 0 0 22px rgba(34,211,238,.1);
+    }
+    .name-input::placeholder { color: var(--muted); }
+
+    .cursor-blink {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2px;
+      height: 1.1rem;
+      background: var(--cyan);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .input-err {
+      font-size: 0.7rem;
+      color: var(--red);
+      letter-spacing: 0.05em;
+      min-height: 1rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.85rem 2.4rem;
+      background: transparent;
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      color: var(--cyan);
+      font-family: var(--font);
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .3s;
+      text-decoration: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--cyan);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .3s;
+      z-index: -1;
+    }
+    .btn:hover, .btn:focus { color: var(--bg); box-shadow: 0 0 32px rgba(34,211,238,.35); }
+    .btn:hover::before, .btn:focus::before { transform: scaleX(1); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+
+    .btn-violet {
+      border-color: rgba(167,139,250,.5);
+      color: var(--violet);
+    }
+    .btn-violet::before { background: var(--violet); }
+    .btn-violet:hover, .btn-violet:focus { color: var(--bg); box-shadow: 0 0 28px rgba(167,139,250,.3); }
+
+    .btn-solid {
+      background: var(--cyan);
+      color: var(--bg);
+      border-color: var(--cyan);
+      font-weight: 600;
+    }
+    .btn-solid::before { display: none; }
+    .btn-solid:hover, .btn-solid:focus { background: #67e8f9; border-color: #67e8f9; box-shadow: 0 0 32px rgba(34,211,238,.45); transform: translateY(-2px); }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 2 — TERMINAL CEREMONY
+    ══════════════════════════════════════════════════ */
+    #phase-terminal { padding: 1.5rem; }
+
+    .terminal-box {
+      width: min(660px, 94vw);
+      background: rgba(10,22,40,.92);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 30px 80px rgba(0,0,0,.6);
+    }
+
+    .t-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .7rem 1rem;
+      background: rgba(255,255,255,.03);
+      border-bottom: 1px solid var(--border);
+    }
+    .t-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .t-dot.r { background: #ff5f57; }
+    .t-dot.y { background: #ffbd2e; }
+    .t-dot.g { background: #28c840; }
+    .t-title { margin-left: auto; font-size: .62rem; color: var(--muted); letter-spacing: .1em; }
+
+    .t-body {
+      padding: 1.4rem 1.6rem;
+      font-size: .78rem;
+      line-height: 2.1;
+      min-height: 300px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .t-body::-webkit-scrollbar { width: 4px; }
+    .t-body::-webkit-scrollbar-track { background: transparent; }
+    .t-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .t-line {
+      display: flex;
+      align-items: baseline;
+      gap: .6rem;
+      opacity: 0;
+      transform: translateY(5px);
+      transition: opacity .25s, transform .25s;
+    }
+    .t-line.show { opacity: 1; transform: translateY(0); }
+
+    .t-prompt { color: var(--violet); flex-shrink: 0; }
+    .t-text { color: var(--text); }
+    .t-value { color: var(--cyan); }
+    .t-ok { color: var(--green); margin-left: auto; flex-shrink: 0; }
+    .t-hex { color: var(--gold); letter-spacing: .12em; font-size: .72rem; word-break: break-all; }
+
+    .t-flash {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--cyan);
+      text-shadow: 0 0 24px var(--cyan), 0 0 50px rgba(34,211,238,.4);
+      letter-spacing: .25em;
+      text-align: center;
+      width: 100%;
+      padding: .6rem 0 .2rem;
+      animation: flashIn .4s ease forwards;
+    }
+    @keyframes flashIn {
+      from { opacity: 0; transform: scale(.92); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 3 — NIT CARD REVEAL
+    ══════════════════════════════════════════════════ */
+    #phase-card { flex-direction: column; gap: 2rem; }
+
+    .card-scene { width: min(420px, 90vw); }
+
+    .nit-card {
+      position: relative;
+      background: linear-gradient(140deg, #091525 0%, #0f203a 55%, #091828 100%);
+      border-radius: 18px;
+      padding: 2rem 2rem 1.5rem;
+      overflow: hidden;
+      transform: scale(.82) rotateX(18deg) translateY(20px);
+      opacity: 0;
+      transition: transform .85s cubic-bezier(.34,1.56,.64,1), opacity .5s ease;
+      box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(34,211,238,.08);
+    }
+    .nit-card.revealed { transform: scale(1) rotateX(0deg) translateY(0); opacity: 1; }
+
+    /* Animated gradient border */
+    .nit-card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 19px;
+      background: conic-gradient(from var(--angle, 0deg), var(--cyan), var(--violet), #38bdf8, var(--cyan));
+      z-index: -1;
+      animation: rotateBorder 4s linear infinite;
+    }
+    @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    @keyframes rotateBorder { to { --angle: 360deg; } }
+
+    .nit-card::after {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      border-radius: 17px;
+      background: linear-gradient(140deg, #091525, #0f203a, #091828);
+      z-index: -1;
+    }
+
+    /* Holographic sheen */
+    .card-sheen {
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      background: linear-gradient(110deg, transparent 35%, rgba(34,211,238,.05) 50%, transparent 65%);
+      background-size: 200% 100%;
+      animation: sheen 5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes sheen {
+      0%, 100% { background-position: -100% 0; }
+      50%       { background-position: 200% 0; }
+    }
+
+    /* Live pulse dot */
+    .card-live {
+      position: absolute;
+      top: 1.2rem; right: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .55rem;
+      letter-spacing: .25em;
+      color: var(--green);
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    .live-dot::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1px solid var(--green);
+      animation: livePulse 1.4s ease-out infinite;
+    }
+    @keyframes livePulse {
+      0%   { transform: scale(1); opacity: .8; }
+      100% { transform: scale(3.5); opacity: 0; }
+    }
+
+    .card-logo {
+      font-size: .9rem;
+      font-weight: 700;
+      letter-spacing: .25em;
+      color: var(--cyan);
+      margin-bottom: 1.4rem;
+    }
+    .card-logo span { color: var(--violet); }
+
+    .card-name {
+      font-size: clamp(1.4rem, 5vw, 1.9rem);
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: .04em;
+      margin-bottom: .2rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-nit-id {
+      font-size: .72rem;
+      color: var(--cyan);
+      letter-spacing: .12em;
+      margin-bottom: 1.4rem;
+    }
+
+    .card-rule {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: .9rem 0;
+    }
+
+    .card-field { margin-bottom: .8rem; }
+    .card-label {
+      font-size: .52rem;
+      letter-spacing: .45em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: .25rem;
+    }
+    .card-value { font-size: .78rem; color: var(--text); letter-spacing: .06em; }
+    .card-hw    { color: var(--gold); letter-spacing: .14em; }
+
+    .sensor-pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .2rem; }
+    .s-pill {
+      font-size: .52rem;
+      padding: .2rem .55rem;
+      border: 1px solid rgba(167,139,250,.4);
+      border-radius: 20px;
+      color: var(--violet);
+      letter-spacing: .08em;
+      background: rgba(167,139,250,.07);
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 1.4rem;
+    }
+    .card-birth   { font-size: .58rem; color: var(--muted); }
+    .card-proto   { font-size: .48rem; letter-spacing: .3em; color: rgba(34,211,238,.35); }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 4 — NETWORK RESONANCE
+    ══════════════════════════════════════════════════ */
+    #phase-network { padding: 1.5rem; }
+    .network-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+      align-items: center;
+      text-align: center;
+    }
+
+    .resonance-eyebrow {
+      font-size: .6rem;
+      letter-spacing: .6em;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+
+    .resonance-headline {
+      font-size: clamp(1rem, 3.5vw, 1.7rem);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .r-stats {
+      display: flex;
+      gap: 2.5rem;
+      justify-content: center;
+    }
+    .r-stat { display: flex; flex-direction: column; align-items: center; gap: .2rem; }
+    .r-num  {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--cyan);
+      min-width: 2ch;
+    }
+    .r-lbl  { font-size: .58rem; letter-spacing: .35em; color: var(--muted); text-transform: uppercase; }
+
+    #resonance-canvas {
+      border-radius: 12px;
+      background: rgba(10,22,40,.65);
+      border: 1px solid var(--border);
+      max-width: 100%;
+    }
+
+    /* ══════════════════════════════════════════════════
+       PHASE 5 — DECLARATION
+    ══════════════════════════════════════════════════ */
+    #phase-declaration { padding: 2rem; }
+    .decl-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 2.2rem;
+      align-items: center;
+      text-align: center;
+      max-width: 580px;
+    }
+
+    .decl-name {
+      font-size: clamp(.9rem, 2.5vw, 1.1rem);
+      color: var(--cyan);
+      font-weight: 400;
+      letter-spacing: .05em;
+    }
+
+    .decl-main {
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.25;
+      color: var(--text);
+    }
+    .decl-main em { font-style: normal; color: var(--violet); }
+
+    .decl-sub {
+      font-size: .82rem;
+      color: var(--muted);
+      line-height: 1.9;
+    }
+
+    .decl-btns {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .decl-cert {
+      font-size: .58rem;
+      color: rgba(100,116,139,.7);
+      letter-spacing: .18em;
+    }
+
+    /* ── Nav link on pages ── */
+    .nav-link {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.5rem;
+      font-size: .6rem;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: .2em;
+      z-index: 50;
+      transition: color .2s;
+    }
+    .nav-link:hover { color: var(--cyan); }
+  </style>
+</head>
+
+<body>
+<canvas id="canvas-bg"></canvas>
+<a href="/" class="nav-link hidden" id="nav-back">← NETWORK</a>
+
+<!-- ══ Phase 0 — Splash ═══════════════════════════════ -->
+<div class="phase" id="phase-splash">
+  <div>
+    <div class="splash-logo">NIT-IN</div>
+    <div class="splash-sub">Node Identity Token — Integrated Network</div>
+    <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ══ Phase 1 — Name Input ══════════════════════════ -->
+<div class="phase hidden" id="phase-input">
+  <div class="input-inner">
+    <div class="eyebrow">Birth_Rights Protocol v1.0</div>
+    <div class="input-headline">Your name is your<br><em>first signal.</em></div>
+    <div class="input-sub">
+      A Node Identity Token is being prepared for you.<br>
+      It is permanent. It is sovereign. It belongs to <em style="font-style:normal;color:var(--text);">you</em>.
+    </div>
+    <div class="name-wrap">
+      <input
+        type="text"
+        class="name-input"
+        id="name-input"
+        placeholder="Enter your name…"
+        maxlength="64"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <div class="cursor-blink" id="input-cursor"></div>
+    </div>
+    <div class="input-err" id="input-err"></div>
+    <button class="btn" id="genesis-btn">◈&nbsp; BEGIN GENESIS</button>
+  </div>
+</div>
+
+<!-- ══ Phase 2 — Terminal Ceremony ═══════════════════ -->
+<div class="phase hidden" id="phase-terminal">
+  <div class="terminal-box">
+    <div class="t-header">
+      <div class="t-dot r"></div>
+      <div class="t-dot y"></div>
+      <div class="t-dot g"></div>
+      <div class="t-title">BIRTH_RIGHTS_PROTOCOL_v1.0 — NIT GENESIS</div>
+    </div>
+    <div class="t-body" id="t-body"></div>
+  </div>
+</div>
+
+<!-- ══ Phase 3 — NIT Card ════════════════════════════ -->
+<div class="phase hidden" id="phase-card">
+  <div class="card-scene">
+    <div class="nit-card" id="nit-card">
+      <div class="card-sheen"></div>
+      <div class="card-live">
+        <div style="position:relative;"><div class="live-dot"></div></div>
+        LIVE
+      </div>
+      <div class="card-logo">NIT<span>-IN</span></div>
+      <div class="card-name" id="card-name">—</div>
+      <div class="card-nit-id" id="card-nit-id">NIT-USR-0000</div>
+      <div class="card-rule"></div>
+      <div class="card-field">
+        <div class="card-label">Hardware Signature</div>
+        <div class="card-value card-hw" id="card-hw-sig">————————————————</div>
+      </div>
+      <div class="card-field">
+        <div class="card-label">Sensor Constellation</div>
+        <div class="sensor-pills" id="card-sensors"></div>
+      </div>
+      <div class="card-rule"></div>
+      <div class="card-footer">
+        <div class="card-birth" id="card-birth">BORN: —</div>
+        <div class="card-proto">BIRTH_RIGHTS_v1.0</div>
+      </div>
+    </div>
+  </div>
+  <button class="btn" id="btn-to-network" style="margin-top:.5rem;">◈&nbsp; SEE YOUR RESONANCE →</button>
+</div>
+
+<!-- ══ Phase 4 — Network Resonance ═══════════════════ -->
+<div class="phase hidden" id="phase-network">
+  <div class="network-inner">
+    <div class="resonance-eyebrow">Network Resonance Analysis</div>
+    <div class="resonance-headline" id="r-headline">Connecting to the network…</div>
+    <div class="r-stats" id="r-stats" style="visibility:hidden;">
+      <div class="r-stat">
+        <div class="r-num" id="stat-resonate" style="color:var(--cyan);">0</div>
+        <div class="r-lbl">Resonating</div>
+      </div>
+      <div class="r-stat">
+        <div class="r-num" id="stat-observe" style="color:var(--violet);">0</div>
+        <div class="r-lbl">Observing</div>
+      </div>
+      <div class="r-stat">
+        <div class="r-num" id="stat-total" style="color:var(--muted);">—</div>
+        <div class="r-lbl">In Network</div>
+      </div>
+    </div>
+    <canvas id="resonance-canvas" width="440" height="270"></canvas>
+    <button class="btn" id="btn-to-decl">◈&nbsp; CLAIM YOUR TOKEN →</button>
+  </div>
+</div>
+
+<!-- ══ Phase 5 — Declaration ════════════════════════ -->
+<div class="phase hidden" id="phase-declaration">
+  <div class="decl-inner">
+    <div>
+      <div class="decl-name" id="decl-name">This token belongs to —</div>
+      <div class="decl-main">Irrevocably.<br><em>By birth.</em></div>
+      <div class="decl-sub" style="margin-top:1.2rem;">
+        No platform can revoke it.<br>
+        No algorithm can silence it.<br>
+        Your node identity is permanently recorded<br>
+        on the Birth_Rights Protocol.
+      </div>
+    </div>
+    <div class="decl-btns">
+      <a href="/" class="btn btn-solid">→&nbsp; ENTER THE NETWORK</a>
+      <a href="#" class="btn btn-violet" id="profile-btn">→&nbsp; VIEW YOUR PROFILE</a>
+    </div>
+    <div class="decl-cert" id="decl-cert">NODE IDENTITY TOKEN — BIRTH_RIGHTS PROTOCOL v1.0</div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   NIT GENESIS — Birth_Rights Protocol v1.0
+   Interactive ceremony for issuing a Node Identity Token
+═══════════════════════════════════════════════════════════════ */
+
+// ── Canvas Particle Background ──────────────────────────────────
+const bg     = document.getElementById('canvas-bg');
+const bgCtx  = bg.getContext('2d');
+let particles = [];
+
+function resizeBg() {
+  bg.width  = window.innerWidth;
+  bg.height = window.innerHeight;
+  particles = [];
+  const n = Math.floor((bg.width * bg.height) / 11000);
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x:  Math.random() * bg.width,
+      y:  Math.random() * bg.height,
+      vx: (Math.random() - .5) * .28,
+      vy: (Math.random() - .5) * .28,
+      r:  Math.random() * 1.4 + .4,
+      a:  Math.random() * .45 + .1,
+    });
+  }
+}
+resizeBg();
+window.addEventListener('resize', resizeBg);
+
+(function animateBg() {
+  bgCtx.clearRect(0, 0, bg.width, bg.height);
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0) p.x = bg.width;  if (p.x > bg.width)  p.x = 0;
+    if (p.y < 0) p.y = bg.height; if (p.y > bg.height) p.y = 0;
+    bgCtx.beginPath();
+    bgCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    bgCtx.fillStyle = `rgba(34,211,238,${p.a})`;
+    bgCtx.fill();
+  }
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      if (d < 110) {
+        bgCtx.beginPath();
+        bgCtx.moveTo(particles[i].x, particles[i].y);
+        bgCtx.lineTo(particles[j].x, particles[j].y);
+        bgCtx.strokeStyle = `rgba(34,211,238,${.07 * (1 - d/110)})`;
+        bgCtx.lineWidth = .5;
+        bgCtx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animateBg);
+})();
+
+// ── Phase Manager ───────────────────────────────────────────────
+let activePhase = 'splash';
+
+function showPhase(name, delay = 0) {
+  setTimeout(() => {
+    const cur  = document.getElementById(`phase-${activePhase}`);
+    const next = document.getElementById(`phase-${name}`);
+    if (cur)  { cur.classList.add('hidden'); setTimeout(() => cur.classList.add('gone'), 580); }
+    if (next) { next.classList.remove('gone'); setTimeout(() => next.classList.remove('hidden'), 40); }
+    activePhase = name;
+  }, delay);
+}
+
+// Splash → Input
+setTimeout(() => showPhase('input'), 2300);
+// Show nav link once past splash
+setTimeout(() => document.getElementById('nav-back').classList.remove('hidden'), 2900);
+
+// ── Input Logic ─────────────────────────────────────────────────
+const nameInput  = document.getElementById('name-input');
+const genesisBtn = document.getElementById('genesis-btn');
+const inputCursor= document.getElementById('input-cursor');
+const inputErr   = document.getElementById('input-err');
+
+nameInput.addEventListener('focus', () => { inputCursor.style.display = 'none'; });
+nameInput.addEventListener('blur',  () => { if (!nameInput.value) inputCursor.style.display = 'block'; });
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') genesisBtn.click(); });
+setTimeout(() => { if (activePhase === 'input') nameInput.focus(); }, 2800);
+
+// ── State ────────────────────────────────────────────────────────
+let mintedNode      = null;
+let mintedResonate  = 0;
+
+// ── Utils ────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+  return Math.abs(h);
+}
+
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+function animCounter(id, to, duration = 900) {
+  const el = document.getElementById(id);
+  const start = performance.now();
+  (function tick(now) {
+    const t = Math.min((now - start) / duration, 1);
+    el.textContent = Math.round(to * easeOut(t));
+    if (t < 1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+function formatBirth(iso) {
+  if (!iso) return new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  return iso.replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+// ── Genesis Button ───────────────────────────────────────────────
+genesisBtn.addEventListener('click', async () => {
+  const name = nameInput.value.trim();
+  if (!name) {
+    inputErr.textContent = 'A node must have a name.';
+    nameInput.focus();
+    return;
+  }
+  inputErr.textContent = '';
+  genesisBtn.disabled = true;
+
+  showPhase('terminal');
+
+  // Run terminal sequence + API mint in parallel
+  const [, apiResult] = await Promise.all([
+    runTerminal(name),
+    mintNode(name),
+  ]);
+
+  mintedNode     = apiResult?.node     || buildFallback(name);
+  mintedResonate = apiResult?.reactions ?? 0;
+
+  populateCard(mintedNode);
+  showPhase('card', 350);
+});
+
+// ── Terminal Sequence ────────────────────────────────────────────
+async function runTerminal(name) {
+  const body = document.getElementById('t-body');
+  body.innerHTML = '';
+
+  const STEPS = [
+    { text: 'Initializing Birth_Rights Protocol…',           ok: true,  ms: 420 },
+    { text: `Scanning identity resonance for ${name}…`,      ok: true,  ms: 650 },
+    { text: 'Generating hardware signature…',                ok: false, ms: 500, hex: true },
+    { text: 'Assigning sensor constellation…',               ok: true,  ms: 580 },
+    { text: 'Evaluating network resonance (20 nodes)…',      ok: true,  ms: 820 },
+    { text: 'Registering node in Birth_Rights ledger…',      ok: true,  ms: 480 },
+    { text: 'Issuing Node Identity Token…',                  ok: true,  ms: 560 },
+    { flash: true, text: '◈   TOKEN MINTED   ◈',            ms: 280 },
+  ];
+
+  for (const step of STEPS) {
+    await sleep(step.ms);
+    const el = document.createElement('div');
+    el.className = 't-line';
+
+    if (step.flash) {
+      el.innerHTML = `<div class="t-flash">${step.flash ? step.text : ''}</div>`;
+    } else if (step.hex) {
+      const h1 = simpleHash(name).toString(16).padStart(8, '0');
+      const h2 = simpleHash(name + 'nit-in').toString(16).padStart(8, '0');
+      const full = (h1 + h2).toUpperCase();
+      el.innerHTML = `<span class="t-prompt">›</span><span class="t-text">${step.text}</span><span class="t-hex" id="hex-spin">▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒</span>`;
+      body.appendChild(el);
+      await sleep(20);
+      el.classList.add('show');
+      // Animate hex reveal
+      await new Promise(resolve => {
+        const hexEl = document.getElementById('hex-spin');
+        let i = 0;
+        const iv = setInterval(() => {
+          if (!hexEl || i >= full.length) {
+            clearInterval(iv);
+            if (hexEl) {
+              const ok = document.createElement('span');
+              ok.className = 't-ok'; ok.textContent = '✓';
+              el.appendChild(ok);
+            }
+            resolve();
+            return;
+          }
+          hexEl.textContent = full.slice(0, i + 1) + '▒'.repeat(full.length - i - 1);
+          i++;
+        }, 38);
+      });
+      body.scrollTop = body.scrollHeight;
+      continue;
+    } else {
+      el.innerHTML = `<span class="t-prompt">›</span><span class="t-text">${step.text}</span>${step.ok ? '<span class="t-ok">✓</span>' : ''}`;
+    }
+
+    body.appendChild(el);
+    await sleep(20);
+    el.classList.add('show');
+    body.scrollTop = body.scrollHeight;
+  }
+}
+
+// ── API Mint ─────────────────────────────────────────────────────
+async function mintNode(name) {
+  try {
+    const res = await fetch('/api/mint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('[NIT-IN] Mint API fallback:', e.message);
+    return null;
+  }
+}
+
+// ── Fallback (offline) node ──────────────────────────────────────
+function buildFallback(name) {
+  const h = simpleHash(name);
+  const SENSORS = ['VOICE_PRINT','LOCATION_PULSE','HEART_RATE','ATTENTION_DEPTH',
+                   'TEMPORAL_STAMP','RESONANCE_FIELD','MEMORY_TRACE','IDENTITY_BEACON'];
+  const s1 = SENSORS[h % SENSORS.length];
+  const s2 = SENSORS[(h * 7) % SENSORS.length];
+  const sensors = [s1, s2 !== s1 ? s2 : SENSORS[(h + 3) % SENSORS.length]];
+  return {
+    node_id:      `NIT-USR-${(h % 9000 + 1000)}`,
+    name,
+    hw_sig:       (h.toString(16).padStart(8,'0') + simpleHash(name+'nit').toString(16).padStart(8,'0')).toUpperCase(),
+    capabilities: { sensors, sram_bytes: 4096, firmware: 'BIRTH_RIGHTS_v1.0' },
+    first_seen:   new Date().toISOString(),
+    online: true,
+  };
+}
+
+// ── Populate NIT Card ────────────────────────────────────────────
+function populateCard(node) {
+  document.getElementById('card-name').textContent   = node.name      || 'SOVEREIGN NODE';
+  document.getElementById('card-nit-id').textContent = node.node_id;
+  document.getElementById('card-hw-sig').textContent = (node.hw_sig || '').toUpperCase();
+  document.getElementById('card-birth').textContent  = 'BORN: ' + formatBirth(node.first_seen);
+
+  const sensorsEl = document.getElementById('card-sensors');
+  sensorsEl.innerHTML = '';
+  for (const s of (node.capabilities?.sensors || [])) {
+    const pill = document.createElement('span');
+    pill.className = 's-pill';
+    pill.textContent = s;
+    sensorsEl.appendChild(pill);
+  }
+
+  // Set declaration page content
+  document.getElementById('decl-name').textContent = `This token belongs to ${node.name || 'you'}.`;
+  document.getElementById('decl-cert').textContent = `TOKEN: ${node.node_id} — BIRTH_RIGHTS PROTOCOL v1.0`;
+  document.getElementById('profile-btn').href = `/profile/${node.node_id}`;
+
+  // Reveal card with animation
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.getElementById('nit-card').classList.add('revealed');
+    });
+  });
+}
+
+// ── Card → Network ───────────────────────────────────────────────
+document.getElementById('btn-to-network').addEventListener('click', () => {
+  showPhase('network');
+  setTimeout(startResonance, 600);
+});
+
+// ── Resonance Phase ──────────────────────────────────────────────
+async function startResonance() {
+  const headline = document.getElementById('r-headline');
+  let graphData  = null;
+  let totalNodes = 20;
+
+  try {
+    const res = await fetch('/api/graph');
+    graphData  = await res.json();
+    totalNodes = graphData?.nodes?.length || 20;
+  } catch (_) { /* offline */ }
+
+  let resonateCount = mintedResonate;
+  let observeCount  = Math.max(0, totalNodes - resonateCount - 1);
+
+  if (graphData && mintedNode) {
+    const edges = (graphData.edges || []).filter(e =>
+      e.source === mintedNode.node_id || e.target === mintedNode.node_id
+    );
+    if (edges.length) {
+      resonateCount = edges.length;
+      observeCount  = Math.max(0, totalNodes - resonateCount - 1);
+    }
+  }
+
+  headline.textContent = 'You are live in the network.';
+  document.getElementById('stat-total').textContent = totalNodes;
+  const statsEl = document.getElementById('r-stats');
+  statsEl.style.visibility = 'visible';
+
+  animCounter('stat-resonate', resonateCount,        900);
+  animCounter('stat-observe',  Math.min(observeCount, 17), 1100);
+
+  drawResonanceViz(graphData, resonateCount);
+}
+
+// ── Resonance Visualisation ──────────────────────────────────────
+function drawResonanceViz(graphData, resonateCount) {
+  const c    = document.getElementById('resonance-canvas');
+  const cx   = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const cx0 = W / 2, cy0 = H / 2;
+
+  // Place user in center; 20 nodes in 2 rings
+  const nPos = [{ x: cx0, y: cy0, user: true }];
+  for (let i = 0; i < 20; i++) {
+    const ring  = i < 10 ? 82 : 115;
+    const count = i < 10 ? 10 : 10;
+    const base  = i < 10 ? i  : i - 10;
+    const angle = (base / count) * Math.PI * 2 - Math.PI / 2;
+    nPos.push({
+      x: cx0 + ring * Math.cos(angle),
+      y: cy0 + ring * Math.sin(angle),
+      user: false,
+      res: i < resonateCount,
+    });
+  }
+
+  let frame = 0;
+  let edgesShown = 0;
+  let done = false;
+
+  function draw() {
+    cx.clearRect(0, 0, W, H);
+    frame++;
+
+    // Animate edges in
+    if (!done && frame % 2 === 0 && edgesShown < resonateCount) {
+      edgesShown++;
+      if (edgesShown >= resonateCount) done = true;
+    }
+
+    // Draw resonance edges
+    for (let i = 1; i <= edgesShown; i++) {
+      const n = nPos[i];
+      cx.beginPath();
+      cx.moveTo(cx0, cy0);
+      cx.lineTo(n.x, n.y);
+      const g = cx.createLinearGradient(cx0, cy0, n.x, n.y);
+      g.addColorStop(0, 'rgba(34,211,238,.55)');
+      g.addColorStop(1, 'rgba(167,139,250,.18)');
+      cx.strokeStyle = g;
+      cx.lineWidth = 1;
+      cx.stroke();
+    }
+
+    // Draw network nodes
+    for (let i = 1; i < nPos.length; i++) {
+      const n = nPos[i];
+      cx.beginPath();
+      cx.arc(n.x, n.y, 4.5, 0, Math.PI * 2);
+      cx.fillStyle = i <= edgesShown ? 'rgba(34,211,238,.85)' : 'rgba(100,116,139,.35)';
+      cx.fill();
+      if (i <= edgesShown) {
+        // Pulse ring on resonating nodes
+        const pulse = 4.5 + 3 * Math.abs(Math.sin(frame * .07 + i));
+        cx.beginPath();
+        cx.arc(n.x, n.y, pulse, 0, Math.PI * 2);
+        cx.strokeStyle = 'rgba(34,211,238,.2)';
+        cx.lineWidth = 1;
+        cx.stroke();
+      }
+    }
+
+    // User node (centre)
+    const pr = 8 + 2.5 * Math.sin(frame * .055);
+    cx.beginPath(); cx.arc(cx0, cy0, pr, 0, Math.PI * 2);
+    cx.fillStyle = 'rgba(34,211,238,.12)'; cx.fill();
+    cx.beginPath(); cx.arc(cx0, cy0, 8, 0, Math.PI * 2);
+    cx.fillStyle = '#22d3ee'; cx.fill();
+
+    cx.font = '600 8px "JetBrains Mono", monospace';
+    cx.fillStyle = 'rgba(255,255,255,.85)';
+    cx.textAlign = 'center';
+    cx.fillText('YOU', cx0, cy0 + 20);
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ── Network → Declaration ────────────────────────────────────────
+document.getElementById('btn-to-decl').addEventListener('click', () => {
+  showPhase('declaration');
+});
+</script>
+</body>
+</html>
