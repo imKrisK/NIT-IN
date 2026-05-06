@@ -19,8 +19,41 @@ const { startDiscovery, setBroadcast, handleMessage } = require('./serial-bridge
 const { evaluateNetworkReaction }       = require('./resonance');
 const federation                        = require('./federation');
 
-const PORT     = process.env.PORT || 3001;
-const SIMULATE = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
+const PORT       = process.env.PORT || 3001;
+const SIMULATE   = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
+const HUB_SECRET = process.env.HUB_SECRET;
+
+// ── Auth middleware ───────────────────────────────────────────────
+if (!HUB_SECRET) {
+  console.warn('[AUTH] HUB_SECRET not set — write endpoints are unprotected');
+}
+
+function requireAuth(req, res, next) {
+  if (!HUB_SECRET) return next();
+  const header = req.headers['authorization'] || '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (token !== HUB_SECRET) return res.status(401).json({ error: 'unauthorized' });
+  next();
+}
+
+// Resonance gate — node must have >= 40% resonance with the Founder to post
+const RESONANCE_GATE = 0.40;
+const FOUNDER_ID     = 'NIT-USR-0001';
+
+function requireResonance(req, res, next) {
+  const node_id = req.body?.node_id;
+  if (!node_id || node_id === FOUNDER_ID) return next(); // founder always passes
+  const score = registry.computeResonance(node_id, FOUNDER_ID);
+  if (score < RESONANCE_GATE) {
+    return res.status(403).json({
+      error:    'resonance_gated',
+      score:    Math.round(score * 100),
+      required: Math.round(RESONANCE_GATE * 100),
+      msg:      'Insufficient resonance to post signals on this hub',
+    });
+  }
+  next();
+}
 
 // ── Express ───────────────────────────────────────────────────────
 
@@ -55,7 +88,7 @@ app.get('/api/network', (_req, res) => {
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
 
 // Admin API — clear feed
-app.post('/api/admin/clear-feed', (_req, res) => {
+app.post('/api/admin/clear-feed', requireAuth, (_req, res) => {
   const db = require('./db');
   db.clearFeed();
   registry.clearFeed();
@@ -131,7 +164,7 @@ const ALL_HUMAN_SENSORS = [
   'MEMORY_TRACE', 'IDENTITY_BEACON',
 ];
 
-app.post('/api/mint', (req, res) => {
+app.post('/api/mint', requireAuth, (req, res) => {
   const raw = req.body?.name;
   if (!raw || typeof raw !== 'string') {
     return res.status(400).json({ error: 'name required' });
@@ -178,7 +211,7 @@ app.post('/api/mint', (req, res) => {
 });
 
 // ── Human signal transmission ─────────────────────────────────────
-app.post('/api/signal', (req, res) => {
+app.post('/api/signal', requireAuth, requireResonance, (req, res) => {
   const { node_id, msg } = req.body || {};
   if (!node_id || typeof msg !== 'string') {
     return res.status(400).json({ error: 'node_id and msg required' });
@@ -203,7 +236,7 @@ app.post('/api/signal', (req, res) => {
 // ── Profile edit (bio, display name, avatar color) ────────────────
 const EDITABLE = new Set(['bio', 'display_name', 'avatar_color', 'website', 'location']);
 
-app.patch('/api/nodes/:nit_id', (req, res) => {
+app.patch('/api/nodes/:nit_id', requireAuth, (req, res) => {
   const { nit_id } = req.params;
   const node = registry.getAllNodes().find(n => n.node_id === nit_id);
   if (!node) return res.status(404).json({ error: 'node not found' });
@@ -268,7 +301,7 @@ app.get('/api/nodes/:nit_id/export', (req, res) => {
 
 // Identical to what serial-bridge processes from USB; lets virtual
 // nodes and remote hardware POST telemetry without a physical cable.
-app.post('/api/ingest', (req, res) => {
+app.post('/api/ingest', requireAuth, (req, res) => {
   const msg = req.body;
   if (!msg?.node_id || !msg?.type) {
     return res.status(400).json({ error: 'node_id and type required' });
