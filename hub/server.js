@@ -19,14 +19,15 @@ const { startDiscovery, setBroadcast, handleMessage } = require('./serial-bridge
 const { evaluateNetworkReaction }       = require('./resonance');
 const federation                        = require('./federation');
 
-const PORT     = 3001;
-const SIMULATE = process.argv.includes('--simulate');
+const PORT     = process.env.PORT || 3001;
+const SIMULATE = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
 
 // ── Express ───────────────────────────────────────────────────────
 
 const app    = express();
 const server = http.createServer(app);
 
+app.set('trust proxy', 1);
 app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
 
