@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT-IN — Hub Directory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #020617;
+      --bg2:    #0a1628;
+      --bg3:    #0f1f3a;
+      --cyan:   #22d3ee;
+      --violet: #a78bfa;
+      --green:  #4ade80;
+      --gold:   #fbbf24;
+      --red:    #f87171;
+      --orange: #fb923c;
+      --text:   #e2e8f0;
+      --muted:  #64748b;
+      --border: rgba(34,211,238,.14);
+      --font:   'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Nav ── */
+    .topnav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+      padding: .8rem 1.6rem;
+      background: rgba(2,6,23,.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+    .nav-logo { font-size: .85rem; font-weight: 700; letter-spacing: .2em; color: var(--cyan); text-decoration: none; }
+    .nav-logo span { color: var(--violet); }
+    .nav-links { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+    .nav-link { font-size: .58rem; color: var(--muted); text-decoration: none; letter-spacing: .18em; transition: color .2s; }
+    .nav-link:hover, .nav-link.active { color: var(--cyan); }
+    .nav-sep { flex: 1; min-width: 16px; }
+    .hub-pill {
+      font-size: .5rem; letter-spacing: .2em; color: var(--violet);
+      padding: .2rem .7rem; border: 1px solid rgba(167,139,250,.3);
+      border-radius: 20px; background: rgba(167,139,250,.06);
+    }
+
+    /* ── Page layout ── */
+    .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.6rem; }
+
+    .page-header {
+      display: flex; align-items: baseline; gap: 1rem;
+      margin-bottom: 2rem; flex-wrap: wrap;
+    }
+    .page-title { font-size: 1.1rem; font-weight: 600; letter-spacing: .06em; color: var(--cyan); }
+    .page-sub { font-size: .62rem; color: var(--muted); letter-spacing: .1em; }
+
+    .refresh-row {
+      display: flex; align-items: center; gap: .8rem;
+      margin-bottom: 1.6rem; flex-wrap: wrap;
+    }
+    .refresh-label { font-size: .58rem; color: var(--muted); letter-spacing: .12em; }
+    .refresh-btn {
+      background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.2);
+      color: var(--cyan); font-family: var(--font); font-size: .58rem;
+      letter-spacing: .12em; padding: .35rem .9rem; border-radius: 5px;
+      cursor: pointer; transition: background .2s;
+    }
+    .refresh-btn:hover { background: rgba(34,211,238,.15); }
+    .countdown { font-size: .58rem; color: var(--muted); }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: .6rem; font-weight: 600; letter-spacing: .28em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: .9rem;
+      padding-bottom: .4rem; border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Hub card ── */
+    .hub-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 1.2rem;
+      transition: border-color .25s;
+    }
+    .hub-card.this-hub { border-left: 3px solid var(--cyan); }
+    .hub-card.peer-connected { border-left: 3px solid var(--green); }
+    .hub-card.peer-offline   { border-left: 3px solid var(--muted); opacity: .7; }
+
+    .hub-card-header {
+      display: flex; align-items: center; gap: .8rem;
+      margin-bottom: .9rem; flex-wrap: wrap;
+    }
+    .hub-status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .dot-live    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-offline { background: var(--muted); }
+    .hub-id { font-size: .9rem; font-weight: 700; color: var(--cyan); letter-spacing: .1em; }
+    .hub-name { font-size: .62rem; color: var(--muted); }
+    .hub-badge {
+      margin-left: auto;
+      font-size: .48rem; letter-spacing: .18em; padding: .18rem .55rem;
+      border-radius: 20px; border: 1px solid;
+    }
+    .badge-this { border-color: rgba(34,211,238,.4); color: var(--cyan); background: rgba(34,211,238,.06); }
+    .badge-peer { border-color: rgba(74,222,128,.35); color: var(--green); background: rgba(74,222,128,.05); }
+    .badge-offline { border-color: rgba(100,116,139,.3); color: var(--muted); background: transparent; }
+
+    .hub-stats {
+      display: flex; gap: 1.6rem; flex-wrap: wrap;
+      margin-bottom: .9rem;
+    }
+    .hub-stat { display: flex; flex-direction: column; gap: .15rem; }
+    .hub-stat-val { font-size: .85rem; font-weight: 600; color: var(--text); }
+    .hub-stat-key { font-size: .52rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+
+    .hub-url-row {
+      display: flex; align-items: center; gap: .6rem;
+      background: rgba(0,0,0,.25); border-radius: 6px;
+      padding: .5rem .8rem; flex-wrap: wrap;
+    }
+    .hub-url { font-size: .62rem; color: var(--muted); flex: 1; word-break: break-all; }
+    .copy-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: var(--font); font-size: .52rem;
+      padding: .2rem .6rem; border-radius: 4px; cursor: pointer;
+      transition: color .2s, border-color .2s; flex-shrink: 0;
+    }
+    .copy-btn:hover { color: var(--cyan); border-color: rgba(34,211,238,.3); }
+    .copy-btn.copied { color: var(--green); border-color: rgba(74,222,128,.3); }
+
+    .hub-patent {
+      margin-top: .7rem;
+      font-size: .52rem; color: var(--muted); letter-spacing: .1em;
+    }
+    .hub-patent a { color: var(--violet); text-decoration: none; }
+    .hub-patent a:hover { text-decoration: underline; }
+
+    /* ── Empty state ── */
+    .empty-peers {
+      text-align: center; padding: 3rem 1rem;
+      color: var(--muted); font-size: .72rem;
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .empty-hint {
+      font-size: .58rem; color: #334155;
+      max-width: 340px; margin: .6rem auto 0;
+      line-height: 1.7;
+    }
+
+    /* ── Loading spinner ── */
+    .spinner-wrap {
+      display: flex; align-items: center; justify-content: center;
+      padding: 4rem 0;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page { padding: 1.2rem .9rem; }
+      .hub-stats { gap: 1rem; }
+      .topnav { padding: .65rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="nav-logo" href="/">NIT<span>-IN</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="/">◈ Network</a>
+    <a class="nav-link" href="/social">↯ Social</a>
+    <a class="nav-link" href="/onboard">◉ Genesis</a>
+    <a class="nav-link active" href="/hubs">⟡ Hubs</a>
+    <a class="nav-link" href="/messages">✉ Messages</a>
+    <a class="nav-link" href="/admin">⚙ Admin</a>
+  </div>
+  <div class="nav-sep"></div>
+  <span class="hub-pill">HUB DIRECTORY</span>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">⟡ Hub Directory</div>
+    <div class="page-sub">All known NIT-IN hubs in the federation mesh</div>
+  </div>
+
+  <div class="refresh-row">
+    <span class="refresh-label">AUTO-REFRESH</span>
+    <button class="refresh-btn" onclick="loadHubs()">↻ Refresh Now</button>
+    <span class="countdown" id="countdown">—</span>
+  </div>
+
+  <div id="hub-content">
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script>
+const HUB_SECRET = localStorage.getItem('nit_hub_secret') || '';
+const HEADERS = { 'Content-Type': 'application/json', ...(HUB_SECRET ? { Authorization: `Bearer ${HUB_SECRET}` } : {}) };
+
+let refreshTimer;
+let countdownVal = 30;
+
+async function loadHubs() {
+  clearInterval(refreshTimer);
+  countdownVal = 30;
+  updateCountdown();
+
+  try {
+    const data = await fetch('/api/hubs').then(r => r.json());
+    render(data);
+  } catch (e) {
+    document.getElementById('hub-content').innerHTML =
+      `<div class="empty-peers"><div class="empty-icon">⚠</div><div>Error loading hubs: ${e.message}</div></div>`;
+  }
+
+  refreshTimer = setInterval(() => {
+    countdownVal--;
+    updateCountdown();
+    if (countdownVal <= 0) loadHubs();
+  }, 1000);
+}
+
+function updateCountdown() {
+  document.getElementById('countdown').textContent =
+    countdownVal > 0 ? `Next refresh in ${countdownVal}s` : 'Refreshing…';
+}
+
+function render({ this_hub, peers, total_known_hubs }) {
+  const thisUrl = window.location.origin;
+  let html = '';
+
+  // ── This hub ──
+  html += `<div class="section-label">This Hub</div>`;
+  html += `
+    <div class="hub-card this-hub">
+      <div class="hub-card-header">
+        <div class="hub-status-dot dot-live"></div>
+        <div>
+          <div class="hub-id">${esc(this_hub.hub_id)}</div>
+          <div class="hub-name">${esc(this_hub.name)} · ${this_hub.mode === 'simulator' ? 'SIM' : 'HARDWARE'}</div>
+        </div>
+        <div class="hub-badge badge-this">THIS HUB</div>
+      </div>
+      <div class="hub-stats">
+        <div class="hub-stat"><div class="hub-stat-val">${this_hub.total_nodes ?? 0}</div><div class="hub-stat-key">Total Nodes</div></div>
+        <div class="hub-stat"><div class="hub-stat-val">${this_hub.online_nodes ?? 0}</div><div class="hub-stat-key">Online</div></div>
+        <div class="hub-stat"><div class="hub-stat-val">${this_hub.total_edges ?? 0}</div><div class="hub-stat-key">Connections</div></div>
+        <div class="hub-stat"><div class="hub-stat-val">${this_hub.total_posts ?? 0}</div><div class="hub-stat-key">Posts</div></div>
+        <div class="hub-stat"><div class="hub-stat-val">${this_hub.density ?? '0.000'}</div><div class="hub-stat-key">Density</div></div>
+        <div class="hub-stat"><div class="hub-stat-val">${total_known_hubs}</div><div class="hub-stat-key">Known Hubs</div></div>
+      </div>
+      <div class="hub-url-row">
+        <span class="hub-url" id="this-url">${esc(thisUrl)}</span>
+        <button class="copy-btn" id="copy-this" onclick="copyUrl('${esc(thisUrl)}','copy-this')">COPY</button>
+      </div>
+      ${this_hub.patent_ref ? `<div class="hub-patent">Patent pending · <span>${esc(this_hub.patent_ref)}</span> · Birth_Rights Protocol v1.0</div>` : ''}
+    </div>
+  `;
+
+  // ── Peer hubs ──
+  html += `<div class="section-label" style="margin-top:2rem">Peer Hubs (${peers.length})</div>`;
+
+  if (!peers.length) {
+    html += `
+      <div class="empty-peers">
+        <div class="empty-icon">⟡</div>
+        <div>No peer hubs discovered yet</div>
+        <div class="empty-hint">
+          Start another NIT-IN hub on the same LAN — they will find each other
+          automatically via UDP broadcast on port 3002 within 12 seconds.
+        </div>
+      </div>
+    `;
+  } else {
+    peers.forEach(p => {
+      const connected = p.connected;
+      const dotClass = connected ? 'dot-live' : 'dot-offline';
+      const cardClass = connected ? 'peer-connected' : 'peer-offline';
+      const badgeClass = connected ? 'badge-peer' : 'badge-offline';
+      const badgeLabel = connected ? 'CONNECTED' : 'OFFLINE';
+      const last = p.last_seen ? new Date(p.last_seen).toLocaleTimeString() : '—';
+
+      html += `
+        <div class="hub-card ${cardClass}">
+          <div class="hub-card-header">
+            <div class="hub-status-dot ${dotClass}"></div>
+            <div>
+              <div class="hub-id">${esc(p.hub_id)}</div>
+              <div class="hub-name">${esc(p.name || 'Unknown Hub')} · Last seen: ${last}</div>
+            </div>
+            <div class="hub-badge ${badgeClass}">${badgeLabel}</div>
+          </div>
+          <div class="hub-url-row">
+            <span class="hub-url">${esc(p.ws_url || '—')}</span>
+            ${p.ws_url ? `<button class="copy-btn" id="copy-${esc(p.hub_id)}" onclick="copyUrl('${esc(p.ws_url)}','copy-${esc(p.hub_id)}')">COPY WS</button>` : ''}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  document.getElementById('hub-content').innerHTML = html;
+}
+
+function copyUrl(url, btnId) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = 'COPIED ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadHubs();
+</script>
+</body>
+</html>

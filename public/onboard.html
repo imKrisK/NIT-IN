@@ -820,6 +820,16 @@ genesisBtn.addEventListener('click', async () => {
   mintedNode     = apiResult?.node     || buildFallback(name);
   mintedResonate = apiResult?.reactions ?? 0;
 
+  // ── Persist identity to localStorage ──
+  if (mintedNode?.node_id) {
+    localStorage.setItem('nit_id',   mintedNode.node_id);
+    localStorage.setItem('nit_node', JSON.stringify(mintedNode));
+  }
+  if (apiResult?.priv_key && mintedNode?.node_id) {
+    // Store under key-per-NIT-ID so multiple identities coexist
+    localStorage.setItem(`nit_privkey_${mintedNode.node_id}`, apiResult.priv_key);
+  }
+
   populateCard(mintedNode);
   showPhase('card', 350);
 });
@@ -890,9 +900,12 @@ async function runTerminal(name) {
 // ── API Mint ─────────────────────────────────────────────────────
 async function mintNode(name) {
   try {
+    const hubSecret = localStorage.getItem('nit_hub_secret') || '';
+    const mintHeaders = { 'Content-Type': 'application/json' };
+    if (hubSecret) mintHeaders['Authorization'] = `Bearer ${hubSecret}`;
     const res = await fetch('/api/mint', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: mintHeaders,
       body: JSON.stringify({ name }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

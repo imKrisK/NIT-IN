@@ -13,8 +13,10 @@ const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const { WebSocketServer } = require('ws');
+const { generateKeyPairSync, createPublicKey, verify: ed25519Verify } = require('crypto');
 
-const registry                          = require('./nit-registry');
+const db                                        = require('./db');
+const registry                                  = require('./nit-registry');
 const { startDiscovery, setBroadcast, handleMessage } = require('./serial-bridge');
 const { evaluateNetworkReaction }       = require('./resonance');
 const federation                        = require('./federation');
@@ -40,6 +42,21 @@ function requireAuth(req, res, next) {
 // An edge is only created when two nodes score >= RESONANCE_THRESHOLD (0.60).
 // Raw score is not used here because SRAM/uptime similarity inflates new-node scores.
 const FOUNDER_ID = 'NIT-USR-0001';
+
+// ── WebSocket session registry (nit_id → live connections) ───────
+// Used for real-time DM routing. Populated by 'identify' WS messages.
+const sessions = new Map(); // nit_id -> Set<WebSocket>
+
+function deliverDm(nit_id, payload) {
+  const conns = sessions.get(nit_id);
+  if (!conns || !conns.size) return false;
+  const str = JSON.stringify(payload);
+  let sent = false;
+  for (const ws of conns) {
+    if (ws.readyState === 1) { ws.send(str); sent = true; }
+  }
+  return sent;
+}
 
 function requireResonance(req, res, next) {
   const node_id = req.body?.node_id;
@@ -90,7 +107,6 @@ app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../public/ad
 
 // Admin API — clear feed
 app.post('/api/admin/clear-feed', requireAuth, (_req, res) => {
-  const db = require('./db');
   db.clearFeed();
   registry.clearFeed();
   broadcast('feed:cleared', {});
@@ -202,13 +218,21 @@ app.post('/api/mint', requireAuth, (req, res) => {
     free_mem: 4096,
   };
 
+  // Ed25519 keypair — pub_key stored on hub, priv_key returned ONCE to client
+  const { publicKey: pubDer, privateKey: privDer } = generateKeyPairSync('ed25519', {
+    publicKeyEncoding:  { type: 'spki',  format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+  });
+  profile.pub_key = pubDer.toString('base64');
+  const priv_key  = privDer.toString('base64'); // never stored server-side
+
   const node = registry.registerNode(profile);
   const { reactions, newPosts } = evaluateNetworkReaction(node_id);
 
   for (const post of newPosts) broadcast('feed:post', post);
   broadcast('node:registered', { node, reactions });
 
-  res.json({ node, reactions: reactions.filter(r => r.reaction === 'RESONATE').length });
+  res.json({ node, reactions: reactions.filter(r => r.reaction === 'RESONATE').length, priv_key });
 });
 
 // ── Human signal transmission ─────────────────────────────────────
@@ -311,6 +335,86 @@ app.post('/api/ingest', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Public key lookup ─────────────────────────────────────────────
+app.get('/api/nodes/:nit_id/pubkey', (req, res) => {
+  const node = registry.getAllNodes().find(n => n.node_id === req.params.nit_id);
+  if (!node) return res.status(404).json({ error: 'node not found' });
+  if (!node.pub_key) return res.status(404).json({ error: 'node has no Ed25519 key' });
+  res.json({ node_id: node.node_id, pub_key: node.pub_key });
+});
+
+// ── NIT-to-NIT Direct Messages ────────────────────────────────────
+// Messages are Ed25519-signed by the sender.
+// The server verifies authenticity before routing.
+// msg content is authenticated but not E2E encrypted (v1 — upgrade path: X25519).
+app.post('/api/dm', requireAuth, (req, res) => {
+  const { from_nit_id, to_nit_id, msg, sig } = req.body || {};
+
+  if (!from_nit_id || !to_nit_id || typeof msg !== 'string' || !sig) {
+    return res.status(400).json({ error: 'from_nit_id, to_nit_id, msg, sig required' });
+  }
+  const safeMsg = msg.trim().slice(0, 1000);
+  if (!safeMsg) return res.status(400).json({ error: 'msg must not be empty' });
+  if (from_nit_id === to_nit_id) return res.status(400).json({ error: 'cannot DM yourself' });
+
+  const fromNode = registry.getAllNodes().find(n => n.node_id === from_nit_id);
+  if (!fromNode) return res.status(404).json({ error: 'sender not found' });
+  if (!fromNode.pub_key) return res.status(400).json({ error: 'sender has no Ed25519 key — re-mint required' });
+
+  const toNode = registry.getAllNodes().find(n => n.node_id === to_nit_id);
+  if (!toNode) return res.status(404).json({ error: 'recipient not found' });
+
+  // Verify Ed25519 signature: sig = Sign(safeMsg, senderPrivKey)
+  try {
+    const pubKey = createPublicKey({ key: Buffer.from(fromNode.pub_key, 'base64'), format: 'der', type: 'spki' });
+    const valid  = ed25519Verify(null, Buffer.from(safeMsg), pubKey, Buffer.from(sig, 'base64'));
+    if (!valid) return res.status(401).json({ error: 'invalid signature' });
+  } catch {
+    return res.status(400).json({ error: 'signature verification failed' });
+  }
+
+  const dm = db.saveDm({ from_id: from_nit_id, to_id: to_nit_id, msg: safeMsg, sig });
+  const delivered = deliverDm(to_nit_id, { event: 'dm:received', data: dm, ts: Date.now() });
+
+  res.json({ ok: true, dm, delivered });
+});
+
+// DM inbox for a node
+app.get('/api/dms/:nit_id', requireAuth, (req, res) => {
+  const dms = db.loadDms(req.params.nit_id, Number(req.query.limit) || 50);
+  res.json(dms);
+});
+
+// DMs sent by a node
+app.get('/api/dms/:nit_id/sent', requireAuth, (req, res) => {
+  const dms = db.loadSentDms(req.params.nit_id, Number(req.query.limit) || 50);
+  res.json(dms);
+});
+
+// ── Hub directory ─────────────────────────────────────────────────
+app.get('/api/hubs', (_req, res) => {
+  const stats = registry.getStats();
+  const peers = federation.getPeers();
+  res.json({
+    this_hub: {
+      hub_id:       federation.HUB_ID,
+      name:         process.env.HUB_NAME || 'NIT-IN Hub',
+      mode:         SIMULATE ? 'simulator' : 'hardware',
+      total_nodes:  stats.total_nodes,
+      online_nodes: stats.online_nodes,
+      total_edges:  stats.total_edges,
+      total_posts:  stats.total_posts,
+      density:      stats.network_density,
+      patent_ref:   'USPTO-19/668,817',
+    },
+    peers,
+    total_known_hubs: 1 + peers.length,
+  });
+});
+
+app.get('/hubs',     (_req, res) => res.sendFile(path.join(__dirname, '../public/hubs.html')));
+app.get('/messages', (_req, res) => res.sendFile(path.join(__dirname, '../public/messages.html')));
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
@@ -335,6 +439,25 @@ wss.on('connection', ws => {
     },
     ts: Date.now(),
   }));
+
+  // Register nit_id → ws for DM routing
+  ws.on('message', raw => {
+    try {
+      const m = JSON.parse(raw);
+      if (m.type === 'identify' && typeof m.nit_id === 'string' && /^NIT-[A-Z]+-\d{4}$/.test(m.nit_id)) {
+        ws._nit_id = m.nit_id;
+        if (!sessions.has(m.nit_id)) sessions.set(m.nit_id, new Set());
+        sessions.get(m.nit_id).add(ws);
+      }
+    } catch { /* ignore malformed messages */ }
+  });
+
+  ws.on('close', () => {
+    if (ws._nit_id) {
+      sessions.get(ws._nit_id)?.delete(ws);
+      if (sessions.get(ws._nit_id)?.size === 0) sessions.delete(ws._nit_id);
+    }
+  });
 });
 
 // Wire broadcast into serial-bridge (and thus simulator via handleMessage)

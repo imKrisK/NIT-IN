@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIT-IN — Messages</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #020617;
+      --bg2:    #0a1628;
+      --bg3:    #0f1f3a;
+      --cyan:   #22d3ee;
+      --violet: #a78bfa;
+      --green:  #4ade80;
+      --gold:   #fbbf24;
+      --red:    #f87171;
+      --text:   #e2e8f0;
+      --muted:  #64748b;
+      --border: rgba(34,211,238,.14);
+      --font:   'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Nav ── */
+    .topnav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+      padding: .8rem 1.6rem;
+      background: rgba(2,6,23,.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+    .nav-logo { font-size: .85rem; font-weight: 700; letter-spacing: .2em; color: var(--cyan); text-decoration: none; }
+    .nav-logo span { color: var(--violet); }
+    .nav-links { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+    .nav-link { font-size: .58rem; color: var(--muted); text-decoration: none; letter-spacing: .18em; transition: color .2s; }
+    .nav-link:hover, .nav-link.active { color: var(--cyan); }
+    .nav-sep { flex: 1; min-width: 16px; }
+    .msg-pill {
+      font-size: .5rem; letter-spacing: .2em; color: var(--gold);
+      padding: .2rem .7rem; border: 1px solid rgba(251,191,36,.3);
+      border-radius: 20px; background: rgba(251,191,36,.05);
+    }
+
+    /* ── Layout ── */
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.6rem; }
+
+    /* ── Identity panel ── */
+    .identity-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 1.6rem;
+    }
+    .identity-title {
+      font-size: .58rem; letter-spacing: .24em; color: var(--muted);
+      text-transform: uppercase; margin-bottom: .9rem;
+    }
+    .identity-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+    .id-input {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: .72rem;
+      padding: .5rem .8rem; border-radius: 6px; flex: 1; min-width: 160px;
+      transition: border-color .2s;
+    }
+    .id-input:focus { outline: none; border-color: rgba(34,211,238,.4); }
+    .id-input::placeholder { color: var(--muted); }
+
+    .key-input {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: .6rem;
+      padding: .5rem .8rem; border-radius: 6px; flex: 1; min-width: 200px;
+      transition: border-color .2s;
+    }
+    .key-input:focus { outline: none; border-color: rgba(167,139,250,.4); }
+    .key-input::placeholder { color: var(--muted); font-size: .55rem; }
+
+    .btn {
+      background: rgba(34,211,238,.09); border: 1px solid rgba(34,211,238,.25);
+      color: var(--cyan); font-family: var(--font); font-size: .58rem;
+      letter-spacing: .12em; padding: .5rem 1rem; border-radius: 6px;
+      cursor: pointer; transition: background .2s; white-space: nowrap;
+    }
+    .btn:hover { background: rgba(34,211,238,.16); }
+    .btn:disabled { opacity: .4; cursor: default; }
+    .btn-violet { background: rgba(167,139,250,.09); border-color: rgba(167,139,250,.25); color: var(--violet); }
+    .btn-violet:hover { background: rgba(167,139,250,.16); }
+    .btn-send { background: rgba(74,222,128,.09); border-color: rgba(74,222,128,.25); color: var(--green); }
+    .btn-send:hover { background: rgba(74,222,128,.16); }
+
+    .identity-status {
+      font-size: .58rem; margin-top: .6rem;
+      padding: .4rem .7rem; border-radius: 5px;
+      display: none;
+    }
+    .identity-status.ok  { display: block; background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.2); color: var(--green); }
+    .identity-status.err { display: block; background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.2); color: var(--red); }
+
+    .key-hint {
+      font-size: .52rem; color: var(--muted); margin-top: .5rem; line-height: 1.6;
+    }
+    .key-hint a { color: var(--violet); text-decoration: none; }
+    .key-hint a:hover { text-decoration: underline; }
+
+    /* ── Compose panel ── */
+    .compose-panel {
+      background: var(--bg2);
+      border: 1px solid rgba(167,139,250,.18);
+      border-radius: 10px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 1.6rem;
+    }
+    .compose-title {
+      font-size: .58rem; letter-spacing: .24em; color: var(--violet);
+      text-transform: uppercase; margin-bottom: .9rem;
+    }
+    .compose-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: .7rem; }
+    .msg-textarea {
+      width: 100%;
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: .72rem;
+      padding: .6rem .8rem; border-radius: 6px; resize: vertical;
+      min-height: 80px; transition: border-color .2s;
+    }
+    .msg-textarea:focus { outline: none; border-color: rgba(167,139,250,.4); }
+    .msg-textarea::placeholder { color: var(--muted); }
+    .compose-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; }
+    .char-count { font-size: .52rem; color: var(--muted); }
+    .send-status { font-size: .58rem; }
+    .send-status.ok  { color: var(--green); }
+    .send-status.err { color: var(--red); }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display: flex; gap: 2px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.2rem;
+    }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--muted); font-family: var(--font); font-size: .62rem;
+      letter-spacing: .14em; padding: .5rem 1rem .6rem; cursor: pointer;
+      transition: color .2s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+    /* ── Message list ── */
+    .msg-list { display: flex; flex-direction: column; gap: .7rem; }
+
+    .msg-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .9rem 1.1rem;
+      animation: fadeIn .3s ease-out;
+    }
+    .msg-card.incoming { border-left: 3px solid var(--cyan); }
+    .msg-card.outgoing { border-left: 3px solid var(--violet); }
+    .msg-card.dm-new   { border-color: rgba(74,222,128,.35); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+    .msg-meta {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: .5rem; flex-wrap: wrap; gap: .4rem;
+    }
+    .msg-from { font-size: .72rem; font-weight: 600; color: var(--cyan); }
+    .msg-to   { font-size: .72rem; font-weight: 600; color: var(--violet); }
+    .msg-arrow { font-size: .62rem; color: var(--muted); }
+    .msg-time { font-size: .52rem; color: var(--muted); }
+    .msg-body { font-size: .78rem; color: var(--text); line-height: 1.6; word-break: break-word; }
+    .msg-sig  { font-size: .5rem; color: #334155; margin-top: .4rem; word-break: break-all; }
+
+    .empty-state {
+      text-align: center; padding: 3rem 1rem;
+      color: var(--muted); font-size: .7rem;
+    }
+    .empty-state .icon { font-size: 2rem; margin-bottom: .8rem; }
+
+    /* ── Auth note ── */
+    .auth-note {
+      background: rgba(251,191,36,.06); border: 1px solid rgba(251,191,36,.2);
+      border-radius: 8px; padding: .9rem 1.1rem; margin-bottom: 1.6rem;
+      font-size: .6rem; color: var(--gold); line-height: 1.6;
+    }
+    .auth-note strong { color: var(--gold); }
+
+    /* ── Spinner ── */
+    .spinner-sm {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--cyan);
+      border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .page { padding: 1rem .8rem; }
+      .topnav { padding: .65rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="nav-logo" href="/">NIT<span>-IN</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="/">◈ Network</a>
+    <a class="nav-link" href="/social">↯ Social</a>
+    <a class="nav-link" href="/onboard">◉ Genesis</a>
+    <a class="nav-link" href="/hubs">⟡ Hubs</a>
+    <a class="nav-link active" href="/messages">✉ Messages</a>
+    <a class="nav-link" href="/admin">⚙ Admin</a>
+  </div>
+  <div class="nav-sep"></div>
+  <span class="msg-pill">Ed25519 · SIGNED</span>
+</nav>
+
+<div class="page">
+
+  <div class="auth-note">
+    <strong>✦ Ed25519-authenticated direct messages.</strong> Messages are signed by your node's private key — the hub verifies authenticity before routing. Your key never leaves your browser. Messages are not end-to-end encrypted in v1 (encryption upgrade: X25519).
+  </div>
+
+  <!-- Identity panel -->
+  <div class="identity-panel">
+    <div class="identity-title">◈ Your Identity</div>
+    <div class="identity-row">
+      <input class="id-input" id="nit-id-input" type="text" placeholder="NIT-USR-0001" maxlength="32" />
+      <input class="key-input" id="priv-key-input" type="password" placeholder="PKCS8 private key (base64) from your mint" />
+      <button class="btn btn-violet" onclick="loadIdentity()">Load Identity</button>
+    </div>
+    <div class="key-hint">
+      Your private key was returned when you minted your NIT. Find it in localStorage under <code>nit_privkey_&lt;NIT-ID&gt;</code>,
+      or re-enter from your saved credential. <a href="/onboard">Mint a new NIT →</a>
+    </div>
+    <div class="identity-status" id="identity-status"></div>
+  </div>
+
+  <!-- Compose -->
+  <div class="compose-panel" id="compose-panel" style="display:none">
+    <div class="compose-title">✉ New Message</div>
+    <div class="compose-row">
+      <input class="id-input" id="to-nit-input" type="text" placeholder="Recipient NIT-USR-XXXX" maxlength="32" style="flex:1" />
+    </div>
+    <textarea class="msg-textarea" id="msg-body" placeholder="Write your message… (max 1000 chars)" maxlength="1000" oninput="updateCharCount()"></textarea>
+    <div class="compose-footer">
+      <span class="char-count" id="char-count">0 / 1000</span>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <span class="send-status" id="send-status"></span>
+        <button class="btn btn-send" id="send-btn" onclick="sendDm()">Sign & Send →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar" id="tab-bar" style="display:none">
+    <button class="tab-btn active" onclick="switchTab('inbox')">Inbox</button>
+    <button class="tab-btn" onclick="switchTab('sent')">Sent</button>
+  </div>
+
+  <div id="msg-list-area"></div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const HUB_SECRET = localStorage.getItem('nit_hub_secret') || '';
+let myNitId  = null;
+let privKey  = null; // CryptoKey (Ed25519, sign)
+let ws       = null;
+
+// ── Helpers ────────────────────────────────────────────────────────
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr.buffer;
+}
+function bytesToB64(buf) {
+  const arr = new Uint8Array(buf);
+  let str = '';
+  for (const b of arr) str += String.fromCharCode(b);
+  return btoa(str);
+}
+
+function setStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = `identity-status ${type}`;
+}
+function setSendStatus(msg, type) {
+  const el = document.getElementById('send-status');
+  el.textContent = msg;
+  el.className = `send-status ${type}`;
+  if (type === 'ok') setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function updateCharCount() {
+  const val = document.getElementById('msg-body').value.length;
+  document.getElementById('char-count').textContent = `${val} / 1000`;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === name));
+  if (name === 'inbox') loadInbox();
+  else loadSent();
+}
+
+// ── Identity loading ───────────────────────────────────────────────
+async function loadIdentity() {
+  const nitIdRaw = document.getElementById('nit-id-input').value.trim();
+  let keyB64     = document.getElementById('priv-key-input').value.trim();
+
+  if (!nitIdRaw) return setStatus('identity-status', 'Enter your NIT ID first.', 'err');
+
+  // Try localStorage if no key typed
+  if (!keyB64) {
+    keyB64 = localStorage.getItem(`nit_privkey_${nitIdRaw}`) || '';
+  }
+  if (!keyB64) return setStatus('identity-status', 'Paste your private key (base64) or mint a new NIT.', 'err');
+
+  try {
+    const keyBytes = b64ToBytes(keyB64);
+    privKey = await crypto.subtle.importKey(
+      'pkcs8', keyBytes, { name: 'Ed25519' }, false, ['sign']
+    );
+    myNitId = nitIdRaw;
+    // Persist in localStorage for convenience
+    localStorage.setItem(`nit_privkey_${myNitId}`, keyB64);
+
+    setStatus('identity-status', `✓ Loaded — ${myNitId} · key imported`, 'ok');
+
+    document.getElementById('compose-panel').style.display = 'block';
+    document.getElementById('tab-bar').style.display = 'flex';
+
+    connectWs();
+    loadInbox();
+  } catch (e) {
+    setStatus('identity-status', `Key import failed: ${e.message}`, 'err');
+  }
+}
+
+// ── WebSocket (real-time DM delivery) ─────────────────────────────
+function connectWs() {
+  if (ws) ws.close();
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}`);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'identify', nit_id: myNitId }));
+  };
+  ws.onmessage = evt => {
+    const { event, data } = JSON.parse(evt.data);
+    if (event === 'dm:received' && data.to_id === myNitId) {
+      prependDmCard(data, 'incoming', 'dm-new');
+    }
+  };
+  ws.onclose = () => setTimeout(connectWs, 4000);
+}
+
+// ── Send DM ────────────────────────────────────────────────────────
+async function sendDm() {
+  if (!myNitId || !privKey) return setSendStatus('Load your identity first.', 'err');
+
+  const to  = document.getElementById('to-nit-input').value.trim();
+  const msg = document.getElementById('msg-body').value.trim().slice(0, 1000);
+
+  if (!to)  return setSendStatus('Enter a recipient NIT ID.', 'err');
+  if (!msg) return setSendStatus('Message cannot be empty.', 'err');
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  setSendStatus('<span class="spinner-sm"></span>', '');
+
+  try {
+    const msgBytes = new TextEncoder().encode(msg);
+    const sigBuf   = await crypto.subtle.sign('Ed25519', privKey, msgBytes);
+    const sig      = bytesToB64(sigBuf);
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (HUB_SECRET) headers['Authorization'] = `Bearer ${HUB_SECRET}`;
+
+    const res = await fetch('/api/dm', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ from_nit_id: myNitId, to_nit_id: to, msg, sig }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) return setSendStatus(body.error || 'Send failed', 'err');
+
+    setSendStatus(`✓ Delivered${body.delivered ? ' (live)' : ' (stored)'}`, 'ok');
+    document.getElementById('msg-body').value = '';
+    updateCharCount();
+    // Optimistic render in Sent tab
+    if (body.dm) appendDmToSentCache(body.dm);
+  } catch (e) {
+    setSendStatus(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Load inbox / sent ──────────────────────────────────────────────
+async function loadInbox() {
+  if (!myNitId) return;
+  renderLoading();
+  try {
+    const headers = {};
+    if (HUB_SECRET) headers['Authorization'] = `Bearer ${HUB_SECRET}`;
+    const dms = await fetch(`/api/dms/${encodeURIComponent(myNitId)}`, { headers }).then(r => r.json());
+    renderDmList(dms, 'incoming');
+  } catch (e) {
+    renderError(e.message);
+  }
+}
+
+async function loadSent() {
+  if (!myNitId) return;
+  renderLoading();
+  try {
+    const headers = {};
+    if (HUB_SECRET) headers['Authorization'] = `Bearer ${HUB_SECRET}`;
+    const dms = await fetch(`/api/dms/${encodeURIComponent(myNitId)}/sent`, { headers }).then(r => r.json());
+    renderDmList(dms, 'outgoing');
+  } catch (e) {
+    renderError(e.message);
+  }
+}
+
+// ── Render helpers ─────────────────────────────────────────────────
+function renderLoading() {
+  document.getElementById('msg-list-area').innerHTML =
+    `<div class="empty-state"><div class="spinner-sm" style="width:24px;height:24px;border-width:2px"></div></div>`;
+}
+function renderError(msg) {
+  document.getElementById('msg-list-area').innerHTML =
+    `<div class="empty-state"><div class="icon">⚠</div>${esc(msg)}</div>`;
+}
+function renderDmList(dms, type) {
+  if (!dms.length) {
+    const label = type === 'incoming' ? 'No messages yet' : 'Nothing sent yet';
+    document.getElementById('msg-list-area').innerHTML =
+      `<div class="empty-state"><div class="icon">✉</div>${label}</div>`;
+    return;
+  }
+  const area = document.getElementById('msg-list-area');
+  area.innerHTML = '<div class="msg-list" id="dm-list"></div>';
+  dms.forEach(dm => appendDmCard(dm, type));
+}
+
+function appendDmCard(dm, type) {
+  const list = document.getElementById('dm-list');
+  if (!list) return;
+  list.appendChild(buildDmCard(dm, type, ''));
+}
+function prependDmCard(dm, type, extra) {
+  const list = document.getElementById('dm-list');
+  if (!list) return;
+  list.prepend(buildDmCard(dm, type, extra));
+}
+function appendDmToSentCache(dm) {
+  const activTab = document.querySelector('.tab-btn.active')?.textContent?.toLowerCase();
+  if (activTab === 'sent') {
+    const list = document.getElementById('dm-list');
+    if (list) list.prepend(buildDmCard(dm, 'outgoing', ''));
+  }
+}
+
+function buildDmCard(dm, type, extraClass) {
+  const div = document.createElement('div');
+  div.className = `msg-card ${type} ${extraClass}`.trim();
+  const ts = dm.timestamp ? new Date(dm.timestamp).toLocaleString() : '—';
+  const sigShort = dm.sig ? dm.sig.slice(0, 32) + '…' : '';
+
+  div.innerHTML = `
+    <div class="msg-meta">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span class="${type === 'incoming' ? 'msg-from' : 'msg-to'}">${esc(dm.from_id)}</span>
+        <span class="msg-arrow">→</span>
+        <span class="${type === 'incoming' ? 'msg-to' : 'msg-from'}">${esc(dm.to_id)}</span>
+      </div>
+      <span class="msg-time">${ts}</span>
+    </div>
+    <div class="msg-body">${esc(dm.msg)}</div>
+    ${sigShort ? `<div class="msg-sig">sig: ${esc(sigShort)}</div>` : ''}
+  `;
+  return div;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Auto-load from localStorage on page open ───────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Try to auto-load if a NIT ID was saved
+  const stored = Object.keys(localStorage).find(k => k.startsWith('nit_privkey_'));
+  if (stored) {
+    const nid = stored.replace('nit_privkey_', '');
+    document.getElementById('nit-id-input').value = nid;
+    loadIdentity();
+  }
+});
+</script>
+</body>
+</html>
