@@ -36,20 +36,21 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Resonance gate — node must have >= 40% resonance with the Founder to post
-const RESONANCE_GATE = 0.40;
-const FOUNDER_ID     = 'NIT-USR-0001';
+// Resonance gate — node must have at least one established resonance edge to post.
+// An edge is only created when two nodes score >= RESONANCE_THRESHOLD (0.60).
+// Raw score is not used here because SRAM/uptime similarity inflates new-node scores.
+const FOUNDER_ID = 'NIT-USR-0001';
 
 function requireResonance(req, res, next) {
   const node_id = req.body?.node_id;
   if (!node_id || node_id === FOUNDER_ID) return next(); // founder always passes
-  const score = registry.computeResonance(node_id, FOUNDER_ID);
-  if (score < RESONANCE_GATE) {
+  const node = registry.getAllNodes().find(n => n.node_id === node_id);
+  if (!node) return res.status(404).json({ error: 'node not found' });
+  if (!node.connections || node.connections.length === 0) {
     return res.status(403).json({
-      error:    'resonance_gated',
-      score:    Math.round(score * 100),
-      required: Math.round(RESONANCE_GATE * 100),
-      msg:      'Insufficient resonance to post signals on this hub',
+      error:       'resonance_gated',
+      connections: 0,
+      msg:         'Node has no resonance connections — interact with the network first',
     });
   }
   next();
