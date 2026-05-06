@@ -79,6 +79,13 @@
     }
     .id-input:focus { outline: none; border-color: rgba(34,211,238,.4); }
     .id-input::placeholder { color: var(--muted); }
+    .nit-switcher {
+      display: none; margin-bottom: .5rem;
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: .68rem;
+      padding: .4rem .7rem; border-radius: 6px; cursor: pointer;
+    }
+    .nit-switcher-label { font-size: .58rem; color: var(--muted); letter-spacing: .12em; margin-bottom: .25rem; }
 
     .key-input {
       background: var(--bg3); border: 1px solid var(--border);
@@ -238,6 +245,11 @@
   <!-- Identity panel -->
   <div class="identity-panel">
     <div class="identity-title">◈ Your Identity</div>
+    <!-- Multi-NIT switcher — shown when >1 NIT key in localStorage -->
+    <div id="nit-switcher-wrap" style="display:none">
+      <div class="nit-switcher-label">SWITCH IDENTITY</div>
+      <select class="nit-switcher" id="nit-switcher" onchange="onSwitchNit(this.value)"></select>
+    </div>
     <div class="identity-row">
       <input class="id-input" id="nit-id-input" type="text" placeholder="NIT-USR-0001" maxlength="32" />
       <input class="key-input" id="priv-key-input" type="password" placeholder="PKCS8 private key (base64) from your mint" />
@@ -506,14 +518,33 @@ function esc(s) {
 }
 
 // ── Auto-load from localStorage on page open ───────────────────────
+function onSwitchNit(nid) {
+  document.getElementById('nit-id-input').value = nid;
+  loadIdentity();
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  // Try to auto-load if a NIT ID was saved
-  const stored = Object.keys(localStorage).find(k => k.startsWith('nit_privkey_'));
-  if (stored) {
-    const nid = stored.replace('nit_privkey_', '');
-    document.getElementById('nit-id-input').value = nid;
-    loadIdentity();
+  // Collect all stored NIT keys
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('nit_privkey_'));
+  if (keys.length === 0) return;
+
+  const nids = keys.map(k => k.replace('nit_privkey_', ''));
+
+  if (nids.length > 1) {
+    // Populate switcher dropdown
+    const select = document.getElementById('nit-switcher');
+    nids.forEach(nid => {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = nid;
+      select.appendChild(opt);
+    });
+    document.getElementById('nit-switcher-wrap').style.display = 'block';
+    document.querySelector('.nit-switcher').style.display = 'block';
   }
+
+  // Auto-load first NIT
+  document.getElementById('nit-id-input').value = nids[0];
+  loadIdentity();
 });
 </script>
 </body>

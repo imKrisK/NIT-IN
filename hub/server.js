@@ -25,6 +25,40 @@ const PORT       = process.env.PORT || 3001;
 const SIMULATE   = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
 const HUB_SECRET = process.env.HUB_SECRET;
 
+// ── In-memory rate limiter ────────────────────────────────────────
+// Buckets reset every RATE_WINDOW_MS. Keeps O(active nodes) memory.
+const RATE_WINDOW_MS  = 60_000; // 1 minute window
+const RATE_LIMITS     = {
+  signal: 10,  // max 10 signals/min per NIT
+  dm:     20,  // max 20 DMs/min per NIT
+};
+const _rateBuckets    = new Map(); // `${kind}:${nit_id}` → { count, windowStart }
+
+function checkRateLimit(kind, nit_id) {
+  const key  = `${kind}:${nit_id}`;
+  const now  = Date.now();
+  const rec  = _rateBuckets.get(key);
+
+  if (!rec || now - rec.windowStart >= RATE_WINDOW_MS) {
+    _rateBuckets.set(key, { count: 1, windowStart: now });
+    return null; // OK
+  }
+  rec.count++;
+  if (rec.count > RATE_LIMITS[kind]) {
+    const retryAfter = Math.ceil((RATE_WINDOW_MS - (now - rec.windowStart)) / 1000);
+    return retryAfter;
+  }
+  return null; // OK
+}
+
+// Purge stale buckets every 5 minutes to avoid unbounded growth
+setInterval(() => {
+  const cutoff = Date.now() - RATE_WINDOW_MS;
+  for (const [k, v] of _rateBuckets) {
+    if (v.windowStart < cutoff) _rateBuckets.delete(k);
+  }
+}, 5 * 60_000);
+
 // ── Auth middleware ───────────────────────────────────────────────
 if (!HUB_SECRET) {
   console.warn('[AUTH] HUB_SECRET not set — write endpoints are unprotected');
@@ -241,6 +275,11 @@ app.post('/api/signal', requireAuth, requireResonance, (req, res) => {
   if (!node_id || typeof msg !== 'string') {
     return res.status(400).json({ error: 'node_id and msg required' });
   }
+
+  const retryAfter = checkRateLimit('signal', node_id);
+  if (retryAfter !== null) {
+    return res.status(429).json({ error: 'rate_limit', retry_after: retryAfter });
+  }
   const safeMsg = msg.trim().slice(0, 280);
   if (!safeMsg) return res.status(400).json({ error: 'msg must not be empty' });
 
@@ -356,6 +395,11 @@ app.post('/api/dm', requireAuth, (req, res) => {
   const safeMsg = msg.trim().slice(0, 1000);
   if (!safeMsg) return res.status(400).json({ error: 'msg must not be empty' });
   if (from_nit_id === to_nit_id) return res.status(400).json({ error: 'cannot DM yourself' });
+
+  const dmRateAfter = checkRateLimit('dm', from_nit_id);
+  if (dmRateAfter !== null) {
+    return res.status(429).json({ error: 'rate_limit', retry_after: dmRateAfter });
+  }
 
   const fromNode = registry.getAllNodes().find(n => n.node_id === from_nit_id);
   if (!fromNode) return res.status(404).json({ error: 'sender not found' });

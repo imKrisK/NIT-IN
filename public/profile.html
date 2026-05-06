@@ -68,6 +68,7 @@
       transition: color .2s;
     }
     .nav-link:hover { color: var(--cyan); }
+    .nav-links { display: flex; gap: 1.2rem; flex-wrap: wrap; }
     .nav-badge {
       font-size: .5rem;
       padding: .2rem .55rem;
@@ -577,7 +578,7 @@
 <!-- ── Nav ── -->
 <nav class="topnav">
   <a href="/" class="nav-logo">NIT<span>-IN</span></a>
-  <div style="display:flex;gap:1.2rem;flex-wrap:wrap">
+  <div class="nav-links">
     <a href="/"        class="nav-link">NETWORK</a>
     <a href="/social"  class="nav-link">SOCIAL</a>
     <a href="/onboard" class="nav-link">GENESIS</a>

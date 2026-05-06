@@ -123,6 +123,19 @@
     .peer-dot.down { background: var(--muted); }
     .no-peers { text-align: center; color: var(--muted); font-size: .62rem; padding: 1.5rem; }
 
+    /* Hub secret banner */
+    #secret-banner {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--bg2); border-top: 1px solid rgba(251,191,36,.35);
+      padding: .7rem 1.2rem; z-index: 800;
+      display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+    }
+    #secret-banner.hidden { display: none !important; }
+    .secret-banner-lbl { font-size: .6rem; color: var(--gold); letter-spacing: .1em; }
+    .secret-banner-input { flex: 1; min-width: 200px; background: var(--bg3); border: 1px solid rgba(251,191,36,.3); border-radius: 6px; color: var(--text); font-family: var(--font); font-size: .65rem; padding: .4rem .7rem; outline: none; }
+    .secret-banner-input:focus { border-color: var(--gold); }
+
     /* Confirm overlay */
     .overlay {
       display: none; position: fixed; inset: 0;
@@ -153,6 +166,17 @@
   </style>
 </head>
 <body>
+
+<body>
+
+<!-- Hub secret entry banner (shown when nit_hub_secret is missing or wrong) -->
+<div id="secret-banner" class="hidden">
+  <span class="secret-banner-lbl">⚿ HUB KEY REQUIRED</span>
+  <input class="secret-banner-input" id="secret-input" type="password"
+         placeholder="Paste hub secret…" autocomplete="off"
+         onkeydown="if(event.key==='Enter') saveSecret()" />
+  <button class="btn btn-default" style="font-size:.58rem;padding:.35rem .8rem" onclick="saveSecret()">Save & Retry</button>
+</div>
 
 <nav class="topnav">
   <a href="/" class="nav-logo">NIT<span>-IN</span></a>
@@ -258,8 +282,20 @@ async function api(path, opts = {}) {
     opts.headers = Object.assign({ 'Authorization': `Bearer ${secret}` }, opts.headers || {});
   }
   const r = await fetch(path, opts);
+  if (r.status === 401) {
+    document.getElementById('secret-banner').classList.remove('hidden');
+    throw new Error('401 unauthorized — hub key required');
+  }
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
+}
+
+function saveSecret() {
+  const val = document.getElementById('secret-input').value.trim();
+  if (!val) return;
+  localStorage.setItem('nit_hub_secret', val);
+  document.getElementById('secret-banner').classList.add('hidden');
+  loadAll();
 }
 
 // ── Load all data ─────────────────────────────────────────────────
@@ -353,17 +389,24 @@ document.getElementById('confirm-ok').addEventListener('click', () => {
 
 // ── WebSocket — live feed count updates ───────────────────────────
 const _wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(`${_wsProto}//${window.location.host}`);
-ws.onmessage = evt => {
-  try {
-    const { event } = JSON.parse(evt.data);
-    if (event === 'feed:post' || event === 'node:registered') loadAll();
-    if (event === 'feed:cleared') { log('Feed cleared by operator', 'warn'); loadAll(); }
-  } catch (_) {}
-};
+function connectWS() {
+  const ws = new WebSocket(`${_wsProto}//${window.location.host}`);
+  ws.onmessage = evt => {
+    try {
+      const { event } = JSON.parse(evt.data);
+      if (event === 'feed:post' || event === 'node:registered') loadAll();
+      if (event === 'feed:cleared') { log('Feed cleared by operator', 'warn'); loadAll(); }
+    } catch (_) {}
+  };
+  ws.onclose = () => setTimeout(connectWS, 4000);
+}
 
 // ── Boot ──────────────────────────────────────────────────────────
+if (!localStorage.getItem('nit_hub_secret')) {
+  document.getElementById('secret-banner').classList.remove('hidden');
+}
 loadAll();
+connectWS();
 // Auto-refresh every 30s
 setInterval(loadAll, 30_000);
 log('Admin panel connected');

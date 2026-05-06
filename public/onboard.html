@@ -537,24 +537,48 @@
     }
 
     /* ── Nav link on pages ── */
+    /* ── Top nav (visible after splash) ── */
+    .topnav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+      padding: .65rem 2rem;
+      background: rgba(2,6,23,.88);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(14px);
+      transition: opacity .4s;
+    }
+    .topnav.hidden { opacity: 0; pointer-events: none; }
+    .nav-logo {
+      font-size: .85rem; font-weight: 700;
+      letter-spacing: .2em; color: var(--cyan); text-decoration: none;
+    }
+    .nav-logo span { color: var(--violet); }
+    .nav-links { display: flex; gap: 1.2rem; flex-wrap: wrap; }
     .nav-link {
-      position: fixed;
-      top: 1.2rem;
-      left: 1.5rem;
-      font-size: .6rem;
-      color: var(--muted);
-      text-decoration: none;
-      letter-spacing: .2em;
-      z-index: 50;
-      transition: color .2s;
+      font-size: .6rem; color: var(--muted);
+      text-decoration: none; letter-spacing: .18em; transition: color .2s;
     }
     .nav-link:hover { color: var(--cyan); }
+    .nav-link.active { color: var(--cyan); }
+    .nav-sep { flex: 1; }
   </style>
 </head>
 
 <body>
 <canvas id="canvas-bg"></canvas>
-<a href="/" class="nav-link hidden" id="nav-back">← NETWORK</a>
+
+<!-- Top nav — hidden during splash, revealed after -->
+<nav class="topnav hidden" id="topnav">
+  <a href="/" class="nav-logo">NIT<span>-IN</span></a>
+  <div class="nav-links">
+    <a href="/"        class="nav-link">NETWORK</a>
+    <a href="/social"  class="nav-link">SOCIAL</a>
+    <a href="/onboard" class="nav-link active">GENESIS</a>
+    <a href="/hubs"    class="nav-link">HUBS</a>
+    <a href="/messages"class="nav-link">MESSAGES</a>
+    <a href="/admin"   class="nav-link">ADMIN</a>
+  </div>
+</nav>
 
 <!-- ══ Phase 0 — Splash ═══════════════════════════════ -->
 <div class="phase" id="phase-splash">
@@ -755,7 +779,7 @@ function showPhase(name, delay = 0) {
 // Splash → Input
 setTimeout(() => showPhase('input'), 2300);
 // Show nav link once past splash
-setTimeout(() => document.getElementById('nav-back').classList.remove('hidden'), 2900);
+setTimeout(() => document.getElementById('topnav').classList.remove('hidden'), 2900);
 
 // ── Input Logic ─────────────────────────────────────────────────
 const nameInput  = document.getElementById('name-input');
