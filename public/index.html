@@ -418,6 +418,46 @@ ws.onmessage = evt => {
   }
 };
 
+// ── REST bootstrap (runs immediately; WS init will override) ──────
+(async function restBootstrap() {
+  try {
+    const [graphRes, statsRes] = await Promise.all([
+      fetch('/api/graph').then(r => r.json()),
+      fetch('/api/stats').then(r => r.json()),
+    ]);
+    // If WS already fired init, skip (state.nodes will have entries)
+    if (Object.keys(state.nodes).length > 0) return;
+
+    // Normalize graph nodes: REST uses `id`, state uses `node_id`
+    (graphRes.nodes || []).forEach(n => {
+      state.nodes[n.id] = {
+        node_id:    n.id,
+        online:     n.online,
+        connections: Array.isArray(n.connections) ? n.connections : [],
+        post_count: n.post_count || 0,
+        uptime:     n.uptime || 0,
+        free_mem:   n.free_mem || 0,
+        sensors:    n.sensors || [],
+        hardware_sig: n.hardware_sig || '',
+      };
+    });
+    state.edges = (graphRes.edges || []).map(e => ({
+      source: e.source || e.from,
+      target: e.target || e.to,
+      resonance_score: e.resonance_score || 0,
+    }));
+
+    refreshStats({
+      online_nodes:    statsRes.online_nodes    ?? 0,
+      total_edges:     statsRes.total_edges     ?? 0,
+      total_posts:     statsRes.total_posts     ?? 0,
+      network_density: statsRes.network_density ?? '0.000',
+    });
+    rebuildNodesGrid();
+    updateGraph();
+  } catch (_) { /* WS init will populate when it connects */ }
+})();
+
 function handleInit({ nodes, graph, feed, stats, mode }) {
   document.getElementById('mode-badge').textContent =
     (mode === 'sim' ? 'SIM' : 'HARDWARE') + ' MODE';
