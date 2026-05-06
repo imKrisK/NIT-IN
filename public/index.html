@@ -397,6 +397,7 @@ function switchTab(name) {
     if (b.textContent.toLowerCase().includes(name)) b.classList.add('active');
   });
   if (name === 'network') restartSim();
+  if (name === 'peers')   loadPeers();
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────
@@ -797,12 +798,7 @@ async function loadPeers() {
   }
 }
 
-// Hook peers tab load
-const _origSwitchTab = switchTab;
-function switchTab(name) {
-  _origSwitchTab(name);
-  if (name === 'peers') loadPeers();
-}
+// Peers loaded on-demand from switchTab above
 </script>
 </body>
 </html>
