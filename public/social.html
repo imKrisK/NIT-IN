@@ -473,9 +473,12 @@
 <nav class="topnav">
   <a href="/" class="nav-logo">NIT<span>-IN</span></a>
   <div class="nav-links">
-    <a href="/"       class="nav-link">NETWORK</a>
-    <a href="/social" class="nav-link active">SOCIAL</a>
-    <a href="/onboard"class="nav-link">GENESIS</a>
+    <a href="/"        class="nav-link">NETWORK</a>
+    <a href="/social"  class="nav-link active">SOCIAL</a>
+    <a href="/onboard" class="nav-link">GENESIS</a>
+    <a href="/hubs"    class="nav-link">HUBS</a>
+    <a href="/messages"class="nav-link">MESSAGES</a>
+    <a href="/admin"   class="nav-link">ADMIN</a>
   </div>
   <div class="nav-sep"></div>
   <div class="live-pill"><div class="live-dot"></div>LIVE FEED</div>
@@ -971,7 +974,8 @@ el('btn-post').addEventListener('click', async () => {
 
 // ── WebSocket ─────────────────────────────────────────────────────
 function connectWS() {
-  const ws = new WebSocket(`ws://${window.location.host}`);
+  const _wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${_wsProto}//${window.location.host}`);
 
   ws.onmessage = ({ data }) => {
     try {

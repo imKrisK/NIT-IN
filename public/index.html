@@ -400,7 +400,8 @@ function switchTab(name) {
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────
-const ws = new WebSocket(`ws://${window.location.host}`);
+const _wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${_wsProto}//${window.location.host}`);
 const dot = document.getElementById('ws-dot');
 
 ws.onopen = () => dot.classList.add('connected');

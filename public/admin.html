@@ -352,7 +352,8 @@ document.getElementById('confirm-ok').addEventListener('click', () => {
 });
 
 // ── WebSocket — live feed count updates ───────────────────────────
-const ws = new WebSocket(`ws://${window.location.host}`);
+const _wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${_wsProto}//${window.location.host}`);
 ws.onmessage = evt => {
   try {
     const { event } = JSON.parse(evt.data);
