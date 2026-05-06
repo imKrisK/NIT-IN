@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIT-IN — Pricing</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #020617;
+      --surface:   #0f172a;
+      --border:    #1e3a5f;
+      --cyan:      #22d3ee;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --amber:     #fbbf24;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --danger:    #f87171;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      text-decoration: none;
+    }
+    .logo span { color: var(--purple); }
+
+    nav { display: flex; gap: 0; margin-left: auto; }
+    .nav-link {
+      padding: 6px 14px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-radius: 4px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-link:hover { color: var(--cyan); background: rgba(34,211,238,.06); }
+    .nav-link.active { color: var(--cyan); }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 3px;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 520px;
+      margin: 0 auto 24px;
+      line-height: 1.7;
+    }
+    .launch-badge {
+      display: inline-block;
+      padding: 5px 14px;
+      border: 1px solid var(--amber);
+      border-radius: 20px;
+      color: var(--amber);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ── Plans grid ── */
+    .plans {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .plan-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 24px;
+      position: relative;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .plan-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+    .plan-card.featured {
+      border-color: var(--purple);
+      box-shadow: 0 0 24px rgba(167,139,250,0.12);
+    }
+    .plan-card.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: -11px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--purple);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 3px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .plan-icon { font-size: 2rem; margin-bottom: 10px; }
+    .plan-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .plan-tagline {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .plan-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+    .price-amount {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .price-period {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .price-free {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .features {
+      list-style: none;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .features li {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .features li.dim { color: var(--muted); }
+    .check { color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .dash { color: var(--border); flex-shrink: 0; }
+
+    .btn-cta {
+      width: 100%;
+      padding: 10px 0;
+      border-radius: 8px;
+      border: none;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-cta:active { transform: scale(0.98); }
+    .btn-free  { background: rgba(52,211,153,0.1); color: var(--green); border: 1px solid var(--green); }
+    .btn-hub   { background: rgba(34,211,238,0.12); color: var(--cyan); border: 1px solid var(--cyan); }
+    .btn-signal { background: var(--purple); color: #fff; }
+    .btn-signal:hover { opacity: 0.88; }
+    .btn-ent   { background: rgba(251,191,36,0.1); color: var(--amber); border: 1px solid var(--amber); }
+    .btn-cta.coming-soon { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Comparison table ── */
+    .compare-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+    }
+    .compare-wrap h2 {
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    thead th {
+      padding: 10px 16px;
+      text-align: left;
+      color: var(--cyan);
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    thead th:first-child { color: var(--muted); }
+    tbody tr { border-bottom: 1px solid rgba(30,58,95,0.4); }
+    tbody tr:hover { background: rgba(34,211,238,0.02); }
+    tbody td {
+      padding: 9px 16px;
+      color: var(--muted);
+    }
+    tbody td:first-child { color: var(--text); }
+    .yes { color: var(--green); font-weight: 700; }
+    .no  { color: var(--border); }
+    .val { color: var(--text); }
+
+    /* ── FAQ ── */
+    .faq {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+    .faq h2 {
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .faq-item {
+      border-top: 1px solid var(--border);
+      padding: 16px 0;
+    }
+    .faq-q {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .faq-a {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+    }
+    footer a { color: var(--cyan); text-decoration: none; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface);
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      transition: transform 0.3s;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">NIT<span>-IN</span></a>
+  <nav>
+    <a class="nav-link" href="/">NETWORK</a>
+    <a class="nav-link" href="/social.html">SOCIAL</a>
+    <a class="nav-link" href="/hubs.html">HUBS</a>
+    <a class="nav-link" href="/messages.html">MESSAGES</a>
+    <a class="nav-link active" href="/pricing.html">PRICING</a>
+    <a class="nav-link" href="/onboard.html">GENESIS</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>PLANS &amp; PRICING</h1>
+  <p>
+    Every node starts free. Upgrade when your network grows and you need
+    federation, higher throughput, or dedicated infrastructure.
+  </p>
+  <span class="launch-badge">✦ PUBLIC LAUNCH MAY 19, 2026</span>
+</section>
+
+<!-- Plan cards -->
+<div class="plans">
+
+  <!-- FREE -->
+  <div class="plan-card">
+    <div class="plan-icon">⚡</div>
+    <div class="plan-name">NODE</div>
+    <div class="plan-tagline">Your first NIT-ID. Start building your identity mesh.</div>
+    <div class="plan-price">
+      <span class="price-free">FREE</span>
+    </div>
+    <ul class="features">
+      <li><span class="check">✓</span>1 NIT-ID minted</li>
+      <li><span class="check">✓</span>Up to 100 resonance edges</li>
+      <li><span class="check">✓</span>10 signals/min</li>
+      <li><span class="check">✓</span>20 DMs/min</li>
+      <li><span class="check">✓</span>Hub feed access</li>
+      <li><span class="check">✓</span>Ed25519 keypair at mint</li>
+      <li class="dim"><span class="dash">–</span>Hub federation</li>
+      <li class="dim"><span class="dash">–</span>Custom NIT-ID prefix</li>
+      <li class="dim"><span class="dash">–</span>API access</li>
+    </ul>
+    <a href="/onboard.html" class="btn-cta btn-free">Mint your NIT-ID →</a>
+  </div>
+
+  <!-- HUB -->
+  <div class="plan-card">
+    <div class="plan-icon">🔗</div>
+    <div class="plan-name">HUB</div>
+    <div class="plan-tagline">Run your own hub and federate with the full network.</div>
+    <div class="plan-price">
+      <span class="price-amount">$9</span>
+      <span class="price-period">/mo</span>
+    </div>
+    <ul class="features">
+      <li><span class="check">✓</span>Everything in NODE</li>
+      <li><span class="check">✓</span>Unlimited resonance edges</li>
+      <li><span class="check">✓</span>100 signals/min</li>
+      <li><span class="check">✓</span>50 DMs/min</li>
+      <li><span class="check">✓</span>Hub federation (connect to any hub)</li>
+      <li><span class="check">✓</span>Custom hub subdomain</li>
+      <li><span class="check">✓</span>Hub-level admin dashboard</li>
+      <li class="dim"><span class="dash">–</span>Custom NIT-ID prefix</li>
+      <li class="dim"><span class="dash">–</span>API access</li>
+    </ul>
+    <button onclick="handleCheckout('hub', '$9/mo')" class="btn-cta btn-hub coming-soon">Coming May 19 →</button>
+  </div>
+
+  <!-- SIGNAL — featured -->
+  <div class="plan-card featured">
+    <div class="plan-icon">📡</div>
+    <div class="plan-name">SIGNAL</div>
+    <div class="plan-tagline">High-throughput node with analytics and API access.</div>
+    <div class="plan-price">
+      <span class="price-amount">$29</span>
+      <span class="price-period">/mo</span>
+    </div>
+    <ul class="features">
+      <li><span class="check">✓</span>Everything in HUB</li>
+      <li><span class="check">✓</span>Unlimited signals + DMs</li>
+      <li><span class="check">✓</span>Custom NIT-ID prefix (e.g. NIT-KK-)</li>
+      <li><span class="check">✓</span>REST API access (read + write)</li>
+      <li><span class="check">✓</span>Node analytics dashboard</li>
+      <li><span class="check">✓</span>Priority signal delivery</li>
+      <li><span class="check">✓</span>Edge weight history (90 days)</li>
+      <li class="dim"><span class="dash">–</span>Dedicated instance</li>
+      <li class="dim"><span class="dash">–</span>SLA</li>
+    </ul>
+    <button onclick="handleCheckout('signal', '$29/mo')" class="btn-cta btn-signal coming-soon">Coming May 19 →</button>
+  </div>
+
+  <!-- ENTERPRISE -->
+  <div class="plan-card">
+    <div class="plan-icon">🏛️</div>
+    <div class="plan-name">ENTERPRISE</div>
+    <div class="plan-tagline">Dedicated infrastructure, SLA, and white-label NIT network.</div>
+    <div class="plan-price">
+      <span class="price-amount">$99</span>
+      <span class="price-period">/mo</span>
+    </div>
+    <ul class="features">
+      <li><span class="check">✓</span>Everything in SIGNAL</li>
+      <li><span class="check">✓</span>Dedicated Railway instance</li>
+      <li><span class="check">✓</span>99.9% uptime SLA</li>
+      <li><span class="check">✓</span>White-label NIT network</li>
+      <li><span class="check">✓</span>Team node management (up to 50 NITs)</li>
+      <li><span class="check">✓</span>Custom hardware node onboarding</li>
+      <li><span class="check">✓</span>Priority support (4h response)</li>
+      <li><span class="check">✓</span>Bilateral API + webhook events</li>
+    </ul>
+    <button onclick="handleCheckout('enterprise', '$99/mo')" class="btn-cta btn-ent coming-soon">Coming May 19 →</button>
+  </div>
+
+</div>
+
+<!-- Comparison table -->
+<div class="compare-wrap">
+  <h2>Full comparison</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>NODE</th>
+        <th>HUB</th>
+        <th>SIGNAL</th>
+        <th>ENTERPRISE</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Monthly price</td>
+        <td class="yes">Free</td>
+        <td class="val">$9</td>
+        <td class="val">$29</td>
+        <td class="val">$99</td>
+      </tr>
+      <tr>
+        <td>NIT-IDs</td>
+        <td class="val">1</td>
+        <td class="val">3</td>
+        <td class="val">10</td>
+        <td class="val">50</td>
+      </tr>
+      <tr>
+        <td>Resonance edges</td>
+        <td class="val">100</td>
+        <td class="val">Unlimited</td>
+        <td class="val">Unlimited</td>
+        <td class="val">Unlimited</td>
+      </tr>
+      <tr>
+        <td>Signals / min</td>
+        <td class="val">10</td>
+        <td class="val">100</td>
+        <td class="val">Unlimited</td>
+        <td class="val">Unlimited</td>
+      </tr>
+      <tr>
+        <td>Hub federation</td>
+        <td class="no">—</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Custom NIT-ID prefix</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>REST API access</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Analytics dashboard</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Dedicated instance</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>SLA</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="no">—</td>
+        <td class="yes">99.9%</td>
+      </tr>
+      <tr>
+        <td>Hardware node onboarding</td>
+        <td class="val">Self-serve</td>
+        <td class="val">Self-serve</td>
+        <td class="val">Self-serve</td>
+        <td class="yes">Guided</td>
+      </tr>
+      <tr>
+        <td>Support</td>
+        <td class="val">Community</td>
+        <td class="val">Email</td>
+        <td class="val">Email (24h)</td>
+        <td class="yes">Priority (4h)</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- FAQ -->
+<div class="faq">
+  <h2>FAQ</h2>
+
+  <div class="faq-item">
+    <div class="faq-q">What is a NIT-ID?</div>
+    <div class="faq-a">A Node Identity Token — a unique cryptographic identity (Ed25519 keypair) minted for any node: human, hardware, or service. It's the unit of identity in the NIT-IN mesh.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">What does "resonance edge" mean?</div>
+    <div class="faq-a">A resonance edge is a verified connection between two NIT-IDs. Edges have weights that decay and grow based on signal frequency — stronger connections mean higher resonance.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Can I mint a NIT-ID for my Arduino / Raspberry Pi?</div>
+    <div class="faq-a">Yes. Any device with a unique hardware signature (MAC address, serial number) can mint a NIT-ID via the API. Hardware nodes appear on the network graph alongside human nodes.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">What is hub federation?</div>
+    <div class="faq-a">Hub federation lets multiple NIT-IN hubs share node registries and route signals across hub boundaries. HUB+ plans can connect to any other federated hub on the network.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">When will paid plans launch?</div>
+    <div class="faq-a">HUB, SIGNAL, and ENTERPRISE go live May 19, 2026. Free NODE minting is available now at no cost.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Is my private key ever stored on the server?</div>
+    <div class="faq-a">No. Your Ed25519 private key is generated server-side at mint, returned once in the response, and never stored. The server holds only your public key. You are responsible for saving your private key.</div>
+  </div>
+</div>
+
+<footer>
+  NIT-IN — Node Identity Token Integrated Network ·
+  <a href="https://nit-in.conversationmine.ai">nit-in.conversationmine.ai</a> ·
+  <a href="/">Network</a> · <a href="/hubs.html">Hubs</a>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  function toast(msg, ok = true) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.borderColor = ok ? 'var(--green)' : 'var(--amber)';
+    el.style.color = ok ? 'var(--green)' : 'var(--amber)';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // Placeholder until Stripe price IDs are wired — posts to /api/billing/create-checkout
+  async function handleCheckout(plan, label) {
+    const priceIdMap = {
+      hub:        window.__STRIPE_PRICE_HUB__        || '',
+      signal:     window.__STRIPE_PRICE_SIGNAL__     || '',
+      enterprise: window.__STRIPE_PRICE_ENTERPRISE__ || '',
+    };
+    const priceId = priceIdMap[plan];
+    if (!priceId) {
+      toast('Paid plans launch May 19 — join the waitlist!', false);
+      return;
+    }
+    try {
+      const r = await fetch('/api/billing/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, priceId, label }),
+      });
+      const d = await r.json();
+      if (d.url) window.location.href = d.url;
+      else toast(d.error || 'Checkout unavailable', false);
+    } catch {
+      toast('Checkout unavailable — try again', false);
+    }
+  }
+</script>
+
+</body>
+</html>

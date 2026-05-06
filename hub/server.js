@@ -458,6 +458,43 @@ app.get('/api/hubs', (_req, res) => {
 
 app.get('/hubs',     (_req, res) => res.sendFile(path.join(__dirname, '../public/hubs.html')));
 app.get('/messages', (_req, res) => res.sendFile(path.join(__dirname, '../public/messages.html')));
+app.get('/pricing',  (_req, res) => res.sendFile(path.join(__dirname, '../public/pricing.html')));
+
+// ── Stripe billing checkout ──────────────────────────────────────
+// Wire STRIPE_SECRET_KEY, STRIPE_PRICE_HUB, STRIPE_PRICE_SIGNAL,
+// STRIPE_PRICE_ENTERPRISE as Railway env vars to activate.
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_PRICE_MAP  = {
+  hub:        process.env.STRIPE_PRICE_HUB,
+  signal:     process.env.STRIPE_PRICE_SIGNAL,
+  enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
+};
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://nit-in.conversationmine.ai';
+
+app.post('/api/billing/create-checkout', async (req, res) => {
+  if (!STRIPE_SECRET_KEY) {
+    return res.status(503).json({ error: 'billing_not_configured' });
+  }
+  const { plan } = req.body || {};
+  const priceId = STRIPE_PRICE_MAP[plan];
+  if (!priceId) return res.status(400).json({ error: 'invalid_plan' });
+
+  try {
+    // Lazy-load stripe only when billing is configured to avoid hard dep
+    const Stripe = require('stripe');
+    const stripe  = Stripe(STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${PUBLIC_URL}/pricing?checkout=success`,
+      cancel_url:  `${PUBLIC_URL}/pricing`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('[billing]', err.message);
+    res.status(500).json({ error: 'checkout_failed' });
+  }
+});
 
 // ── WebSocket ─────────────────────────────────────────────────────
 
