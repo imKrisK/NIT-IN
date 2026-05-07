@@ -1,0 +1,3 @@
+# Force explicit start command — works around nixpacks $NIXPACKS_PATH undefined variable bug
+[start]
+cmd = "node hub/server.js"
