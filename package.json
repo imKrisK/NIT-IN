@@ -1,6 +1,6 @@
 {
   "name": "nit-in-hub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "NIT-IN: Node Identity Token — Integrated Network. Local hub for 20 Arduino Uno Q nodes. Birth_Rights Protocol v1.0",
   "main": "hub/server.js",
   "scripts": {
