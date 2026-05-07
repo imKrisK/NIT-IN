@@ -260,6 +260,10 @@ app.post('/api/mint', requireAuth, (req, res) => {
   profile.pub_key = pubDer.toString('base64');
   const priv_key  = privDer.toString('base64'); // never stored server-side
 
+  // Derive a globally portable fingerprint: first 16 hex chars of SHA-256(pubkey DER)
+  const { createHash: _createHash } = require('crypto');
+  profile.nit_fingerprint = 'NIT-' + _createHash('sha256').update(pubDer).digest('hex').slice(0, 16).toUpperCase();
+
   const node = registry.registerNode(profile);
   const { reactions, newPosts } = evaluateNetworkReaction(node_id);
 
@@ -267,6 +271,178 @@ app.post('/api/mint', requireAuth, (req, res) => {
   broadcast('node:registered', { node, reactions });
 
   res.json({ node, reactions: reactions.filter(r => r.reaction === 'RESONATE').length, priv_key });
+});
+
+// ── Cross-platform token helper ─────────────────────────────────
+const { createHmac } = require('crypto');
+
+function _xpPayload(nit_id, fingerprint, expiry) {
+  return `${nit_id}:${fingerprint}:${expiry}`;
+}
+
+function verifyXPToken(nit_id, token) {
+  try {
+    const dot = token.lastIndexOf('.');
+    if (dot < 0) return false;
+    const payloadB64 = token.slice(0, dot);
+    const sig        = token.slice(dot + 1);
+    const payload    = Buffer.from(payloadB64, 'base64').toString();
+    const parts      = payload.split(':');
+    if (parts.length < 3) return false;
+    const [tokenNitId, , expiry] = parts;
+    if (tokenNitId !== nit_id) return false;
+    if (parseInt(expiry, 10) < Math.floor(Date.now() / 1000)) return false;
+    const secret   = HUB_SECRET || 'nit-in-birth-rights-v1';
+    const expected = createHmac('sha256', secret).update(payload).digest('hex');
+    // Constant-time comparison
+    if (expected.length !== sig.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+    return diff === 0;
+  } catch { return false; }
+}
+
+// ── POST /api/challenge — issue a one-time sign challenge ─────────
+// Client sends nit_id → server returns a 32-byte hex challenge.
+// Client signs the challenge bytes with their Ed25519 private key
+// and sends the signature back to /api/verify.
+app.post('/api/challenge', (req, res) => {
+  const { nit_id } = req.body || {};
+  if (!nit_id || typeof nit_id !== 'string') {
+    return res.status(400).json({ error: 'nit_id required' });
+  }
+  const node = registry.getAllNodes().find(n => n.node_id === nit_id);
+  if (!node)           return res.status(404).json({ error: 'NIT-ID not found' });
+  if (!node.pub_key)   return res.status(400).json({ error: 'node has no Ed25519 key — re-mint required' });
+
+  const { randomBytes } = require('crypto');
+  const challenge = randomBytes(32).toString('hex');
+  db.saveChallenge(nit_id, challenge);
+
+  res.json({ challenge, expires_in: 300 });
+});
+
+// ── POST /api/verify — verify Ed25519 sig, issue cross-platform token
+// Body: { nit_id, challenge, sig }  (sig = base64(Ed25519Sign(challenge_bytes, priv_key)))
+app.post('/api/verify', (req, res) => {
+  const { nit_id, challenge, sig } = req.body || {};
+  if (!nit_id || !challenge || !sig) {
+    return res.status(400).json({ error: 'nit_id, challenge, sig required' });
+  }
+
+  const node = registry.getAllNodes().find(n => n.node_id === nit_id);
+  if (!node)         return res.status(404).json({ error: 'NIT-ID not found' });
+  if (!node.pub_key) return res.status(400).json({ error: 'node has no Ed25519 key' });
+
+  // Validate challenge: exists, belongs to nit_id, unused, not expired (5 min)
+  const stored = db.loadChallenge(challenge);
+  if (!stored)                    return res.status(401).json({ error: 'invalid challenge' });
+  if (stored.nit_id !== nit_id)   return res.status(401).json({ error: 'challenge mismatch' });
+  if (stored.used)                return res.status(401).json({ error: 'challenge already used' });
+  const age = Math.floor(Date.now() / 1000) - stored.created_at;
+  if (age > 300)                  return res.status(401).json({ error: 'challenge expired' });
+
+  // Verify Ed25519 signature over raw challenge bytes
+  try {
+    const pubKey = createPublicKey({ key: Buffer.from(node.pub_key, 'base64'), format: 'der', type: 'spki' });
+    const valid  = ed25519Verify(null, Buffer.from(challenge), pubKey, Buffer.from(sig, 'base64'));
+    if (!valid) return res.status(401).json({ error: 'invalid signature' });
+  } catch {
+    return res.status(400).json({ error: 'signature verification failed' });
+  }
+
+  // One-time use — mark consumed immediately
+  db.markChallengeUsed(challenge);
+
+  // Issue cross-platform token: base64(payload).HMAC-SHA256(payload, HUB_SECRET)
+  // Payload = "nit_id:fingerprint:expiry_unix"
+  const ts          = Math.floor(Date.now() / 1000);
+  const expiry      = ts + 3600; // 1 hour
+  const fingerprint = node.nit_fingerprint || node.hw_sig;
+  const payload     = _xpPayload(nit_id, fingerprint, expiry);
+  const secret      = HUB_SECRET || 'nit-in-birth-rights-v1';
+  const hmac        = createHmac('sha256', secret).update(payload).digest('hex');
+  const xpToken     = `${Buffer.from(payload).toString('base64')}.${hmac}`;
+
+  res.json({
+    verified:            true,
+    nit_id,
+    fingerprint,
+    cross_platform_token: xpToken,
+    expires_at:          expiry,
+    patent_ref:          'USPTO-19/668,817',
+  });
+});
+
+// ── POST /api/bind — record platform binding after successful verify ─
+// Called by external platforms (KIRO, TWIN, etc.) after they receive a
+// cross_platform_token from /api/verify.
+// Body: { nit_id, platform, cross_platform_token }
+const BINDABLE_PLATFORMS = new Set([
+  'kiro', 'twin', 'manifest', 'uspto', 'iot-maker', 'bwm',
+  'medical', 'legal', 'contract', 'paralegal', 'conversationmine', 'nit-in',
+]);
+
+app.post('/api/bind', (req, res) => {
+  const { nit_id, platform, cross_platform_token } = req.body || {};
+  if (!nit_id || !platform || !cross_platform_token) {
+    return res.status(400).json({ error: 'nit_id, platform, cross_platform_token required' });
+  }
+  if (!verifyXPToken(nit_id, cross_platform_token)) {
+    return res.status(401).json({ error: 'invalid or expired cross_platform_token' });
+  }
+  const safePlatform = platform.toLowerCase().trim();
+  if (!BINDABLE_PLATFORMS.has(safePlatform)) {
+    return res.status(400).json({ error: 'unknown platform', valid_platforms: [...BINDABLE_PLATFORMS] });
+  }
+  db.savePlatformBinding(nit_id, safePlatform);
+  res.json({ ok: true, nit_id, platform: safePlatform });
+});
+
+// ── POST /api/validate-token — external platforms validate a cross_platform_token
+// Body: { nit_id, cross_platform_token }
+// Returns { valid, nit_id, fingerprint, platform_bindings } or 401.
+app.post('/api/validate-token', (req, res) => {
+  const { nit_id, cross_platform_token } = req.body || {};
+  if (!nit_id || !cross_platform_token) {
+    return res.status(400).json({ error: 'nit_id and cross_platform_token required' });
+  }
+  if (!verifyXPToken(nit_id, cross_platform_token)) {
+    return res.status(401).json({ valid: false, error: 'invalid or expired token' });
+  }
+  const node     = registry.getAllNodes().find(n => n.node_id === nit_id);
+  const bindings = db.loadPlatformBindings(nit_id);
+  res.json({
+    valid:             true,
+    nit_id,
+    fingerprint:       node?.nit_fingerprint || null,
+    name:              node?.name,
+    platform_bindings: bindings,
+  });
+});
+
+// ── GET /api/identity/:nit_id — full public identity record ──────
+// Public endpoint — returns node identity + bound platforms.
+// Private key is never exposed. Used by other platforms to look up a NIT-ID.
+app.get('/api/identity/:nit_id', (req, res) => {
+  const node = registry.getAllNodes().find(n => n.node_id === req.params.nit_id);
+  if (!node) return res.status(404).json({ error: 'NIT-ID not found' });
+
+  const bindings = db.loadPlatformBindings(req.params.nit_id);
+  res.json({
+    nit_id:            node.node_id,
+    name:              node.name,
+    display_name:      node.display_name,
+    fingerprint:       node.nit_fingerprint || null,
+    node_type:         node.node_type,
+    sovereign:         node.sovereign || false,
+    genesis:           node.genesis || node.first_seen,
+    sensors:           node.capabilities?.sensors || [],
+    pub_key:           node.pub_key,
+    platform_bindings: bindings,
+    patent_ref:        'USPTO-19/668,817',
+    protocol:          'NIT-IN:BIRTH_RIGHTS_v1.0',
+  });
 });
 
 // ── Human signal transmission ─────────────────────────────────────

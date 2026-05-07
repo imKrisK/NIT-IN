@@ -62,6 +62,23 @@ db.exec(`
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     UNIQUE(email, plan)
   );
+
+  CREATE TABLE IF NOT EXISTS challenges (
+    id         TEXT    PRIMARY KEY,
+    nit_id     TEXT    NOT NULL,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_challenges_nit ON challenges(nit_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS platform_bindings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    nit_id     TEXT    NOT NULL,
+    platform   TEXT    NOT NULL,
+    bound_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(nit_id, platform)
+  );
+  CREATE INDEX IF NOT EXISTS idx_bindings_nit ON platform_bindings(nit_id);
 `);
 
 // ── Prepared statements ───────────────────────────────────────────
@@ -87,6 +104,14 @@ const S = {
 
   insertWaitlist: db.prepare('INSERT OR IGNORE INTO waitlist (email, plan) VALUES (?, ?)'),
   loadWaitlist:   db.prepare('SELECT email, plan, created_at FROM waitlist ORDER BY created_at DESC'),
+
+  insertChallenge:     db.prepare('INSERT INTO challenges (id, nit_id) VALUES (?, ?)'),
+  loadChallenge:       db.prepare('SELECT id, nit_id, used, created_at FROM challenges WHERE id = ?'),
+  markChallengeUsed:   db.prepare('UPDATE challenges SET used = 1 WHERE id = ?'),
+  pruneOldChallenges:  db.prepare('DELETE FROM challenges WHERE created_at < ?'),
+
+  insertBinding:       db.prepare('INSERT OR IGNORE INTO platform_bindings (nit_id, platform) VALUES (?, ?)'),
+  loadBindings:        db.prepare('SELECT platform, bound_at FROM platform_bindings WHERE nit_id = ? ORDER BY bound_at ASC'),
 };
 
 const FEED_CAP = 2000; // max rows kept in DB
@@ -152,6 +177,30 @@ module.exports = {
     return S.loadWaitlist.all().map(r => ({
       ...r,
       created_at: new Date(r.created_at * 1000).toISOString(),
+    }));
+  },
+
+  // Challenges
+  saveChallenge(nit_id, challenge) {
+    // Prune challenges older than 10 minutes before inserting
+    S.pruneOldChallenges.run(Math.floor(Date.now() / 1000) - 600);
+    S.insertChallenge.run(challenge, nit_id);
+  },
+  loadChallenge(challenge) {
+    return S.loadChallenge.get(challenge) || null;
+  },
+  markChallengeUsed(challenge) {
+    S.markChallengeUsed.run(challenge);
+  },
+
+  // Platform bindings
+  savePlatformBinding(nit_id, platform) {
+    S.insertBinding.run(nit_id, platform);
+  },
+  loadPlatformBindings(nit_id) {
+    return S.loadBindings.all(nit_id).map(r => ({
+      platform: r.platform,
+      bound_at: new Date(r.bound_at * 1000).toISOString(),
     }));
   },
 
