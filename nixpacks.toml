@@ -1,3 +1,5 @@
-# Force explicit start command — works around nixpacks $NIXPACKS_PATH undefined variable bug
+# Workaround for nixpacks v1.41.0 NIXPACKS_PATH undefined variable —
+# node is installed via nix into /root/.nix-profile/bin but PATH may not include it.
+# Source the nix profile to restore the PATH before starting the server.
 [start]
-cmd = "node hub/server.js"
+cmd = "bash -c 'source /root/.profile && node hub/server.js'"
