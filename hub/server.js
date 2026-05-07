@@ -1,4 +1,5 @@
 'use strict';
+process.stdout.write('[BOOT] server.js starting\n');
 
 /**
  * NIT-IN Hub Server
