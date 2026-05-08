@@ -201,6 +201,95 @@ app.post('/api/admin/clear-feed', requireAuth, (_req, res) => {
 // Health
 app.get('/health', (_req, res) => res.json({ ok: true, mode: SIMULATE ? 'sim' : 'hardware' }));
 
+// ── Phase 23: Encrypted External Audit Notification Protocol ─────────────────
+// TWIN POSTs encrypted audit envelopes here. NIT-IN verifies the HMAC tag,
+// broadcasts audit:external to all connected operator WebSocket sessions, and
+// stores a local record for the operator dashboard.
+// Envelope format: base64( nonce[16] | XOR-ciphertext | HMAC-SHA256-tag[32] )
+// Key material: TWIN_SHARED_SECRET + nonce via PBKDF2-SHA256.
+// ─────────────────────────────────────────────────────────────────────────────
+const { createHmac: _auditHmac, pbkdf2Sync: _pbkdf2 } = require('crypto');
+const TWIN_AUDIT_SECRET = process.env.TWIN_SHARED_SECRET || '';
+
+function _decryptAuditEnvelope(b64) {
+  const buf        = Buffer.from(b64, 'base64');
+  if (buf.length < 49) throw new Error('envelope too short');   // 16 nonce + 1 min data + 32 tag
+  const nonce      = buf.subarray(0, 16);
+  const tag        = buf.subarray(buf.length - 32);
+  const ciphertext = buf.subarray(16, buf.length - 32);
+  // Verify HMAC-SHA256 tag before decryption
+  const expectedTag = _auditHmac('sha256', TWIN_AUDIT_SECRET)
+    .update(Buffer.concat([nonce, ciphertext])).digest();
+  if (!expectedTag.equals(tag)) throw new Error('HMAC verification failed — envelope tampered or wrong secret');
+  // Derive keystream via PBKDF2-SHA256(secret, nonce, 1 iter, len=ciphertext.length)
+  const key       = _pbkdf2(TWIN_AUDIT_SECRET, nonce, 1, ciphertext.length, 'sha256');
+  const plaintext = Buffer.from(ciphertext.map((b, i) => b ^ key[i]));
+  return JSON.parse(plaintext.toString('utf8'));
+}
+
+const _auditLog = [];   // in-memory ring buffer (last 200 audits — operator dashboard)
+const AUDIT_LOG_MAX = 200;
+
+app.post('/api/audit/notify', requireAuth, (req, res) => {
+  const { audit_type, envelope, ts: auditTs, twin_instance } = req.body || {};
+  if (!audit_type || !envelope) {
+    return res.status(400).json({ error: 'audit_type and envelope required' });
+  }
+  let payload = null;
+  let verified = false;
+  try {
+    if (TWIN_AUDIT_SECRET) {
+      payload  = _decryptAuditEnvelope(envelope);
+      verified = true;
+    }
+  } catch (err) {
+    console.error('[AUDIT] Envelope verification failed:', err.message);
+    return res.status(422).json({ error: 'envelope_verification_failed', detail: err.message });
+  }
+  const record = {
+    audit_type,
+    ts:            auditTs || new Date().toISOString(),
+    twin_instance: twin_instance || 'unknown',
+    verified,
+    payload,       // decrypted only when TWIN_AUDIT_SECRET is set; null otherwise
+    received_at:   Date.now(),
+  };
+  _auditLog.unshift(record);
+  if (_auditLog.length > AUDIT_LOG_MAX) _auditLog.length = AUDIT_LOG_MAX;
+  // Broadcast encrypted notification to all connected operator WebSocket sessions
+  broadcast('audit:external', {
+    audit_type,
+    ts:            record.ts,
+    twin_instance: record.twin_instance,
+    verified,
+    // Broadcast only the decrypted summary (not raw probe data) to WebSocket clients
+    summary:       payload ? {
+      type:                 payload.type,
+      classification:       payload.classification,
+      hr_similarity:        payload.hr_similarity,
+      sensitivity_score:    payload.sensitivity_score,
+      shadow_canary_triggered: payload.shadow_canary_triggered,
+      architect_paused:     payload.architect_paused,
+      pause_reason:         payload.pause_reason,
+      bypassed_count:       payload.bypassed_count,
+      acknowledge_via:      payload.acknowledge_via,
+      recommendation:       payload.recommendation,
+    } : null,
+    envelope,      // forward full envelope for operator clients that hold the secret
+  });
+  console.log(`[AUDIT] ${audit_type} received from ${twin_instance} — verified=${verified} — broadcast to operator`);
+  return res.json({ ok: true, verified, ts: record.ts });
+});
+
+// GET /api/audit/log — operator dashboard: list last N audit records (requireAuth)
+app.get('/api/audit/log', requireAuth, (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, AUDIT_LOG_MAX);
+  const type  = (req.query.type || '').toUpperCase();
+  const items = type ? _auditLog.filter(r => r.audit_type === type) : _auditLog;
+  res.json({ total: items.length, limit, items: items.slice(0, limit) });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Onboard page
 app.get('/onboard', (_req, res) => res.sendFile(path.join(__dirname, '../public/onboard.html')));
 
