@@ -92,6 +92,57 @@ function deliverDm(nit_id, payload) {
   return sent;
 }
 
+// ── Phase 20: Runtime Logic Enforcement ──────────────────────────
+// Calls TWIN /api/cai/enforce before routing signals or DMs.
+// Fail-open: if TWIN is unreachable, the event is permitted.
+const TWIN_ENFORCE_URL = process.env.TWIN_ENFORCE_URL
+  || 'https://twin.conversationmine.ai/api/cai/enforce';
+
+async function checkManifestEnforcement(nit_id, action, token_fingerprint) {
+  try {
+    const res = await fetch(TWIN_ENFORCE_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ nit_id, action, platform: 'nit-in', token_fingerprint }),
+      signal:  AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return { permitted: true };  // fail-open on non-2xx
+    return await res.json();
+  } catch {
+    return { permitted: true };  // fail-open on network error / timeout
+  }
+}
+
+// ── Phase 22: Community Wellness — Contextual Sentiment Classifier ─
+// Distinguishes personal harassment from aggressive technical debate
+// so the Refiner can distinguish real harm signals from healthy friction.
+const _HARASSMENT_KW = [
+  'kill yourself', 'kys', ' die ', 'worthless', 'stupid fuck', 'piece of shit',
+  'moron', 'loser', 'hate you', 'garbage human', 'trash human', 'go die',
+];
+const _TECHNICAL_KW = [
+  'wrong', 'incorrect', 'broken', 'fails', 'bug ', 'error ', 'invalid',
+  'disagree', 'bad design', 'terrible code', 'worst', 'awful implementation',
+  'this sucks', 'terrible', 'horrible code',
+];
+const _SUPPORTIVE_KW = [
+  'thanks', 'thank you', 'great work', 'love this', 'helpful', 'appreciate',
+  'excellent', 'well done', 'nice work', 'perfect', 'awesome', 'respect',
+  'good job', 'brilliant',
+];
+
+function classifySentiment(msg) {
+  const lower = msg.toLowerCase();
+  for (const kw of _HARASSMENT_KW) {
+    if (lower.includes(kw)) return { context: 'personal_harassment', confidence: 0.85 };
+  }
+  const techHits  = _TECHNICAL_KW.filter(kw => lower.includes(kw)).length;
+  const suppHits  = _SUPPORTIVE_KW.filter(kw => lower.includes(kw)).length;
+  if (techHits >= 2) return { context: 'aggressive_technical', confidence: Math.min(0.5 + techHits * 0.1, 0.9) };
+  if (suppHits >= 1) return { context: 'supportive',           confidence: Math.min(0.5 + suppHits * 0.15, 0.9) };
+  return { context: 'neutral', confidence: 0.7 };
+}
+
 function requireResonance(req, res, next) {
   const node_id = req.body?.node_id;
   if (!node_id || node_id === FOUNDER_ID) return next(); // founder always passes
@@ -446,8 +497,8 @@ app.get('/api/identity/:nit_id', (req, res) => {
 });
 
 // ── Human signal transmission ─────────────────────────────────────
-app.post('/api/signal', requireAuth, requireResonance, (req, res) => {
-  const { node_id, msg } = req.body || {};
+app.post('/api/signal', requireAuth, requireResonance, async (req, res) => {
+  const { node_id, msg, cross_platform_token } = req.body || {};
   if (!node_id || typeof msg !== 'string') {
     return res.status(400).json({ error: 'node_id and msg required' });
   }
@@ -462,15 +513,45 @@ app.post('/api/signal', requireAuth, requireResonance, (req, res) => {
   const node = registry.getAllNodes().find(n => n.node_id === node_id);
   if (!node) return res.status(404).json({ error: 'node not found' });
 
+  // Phase 20: Ed25519 / HMAC token verification (if token provided)
+  let tokenFingerprint = null;
+  if (cross_platform_token) {
+    if (!verifyXPToken(node_id, cross_platform_token)) {
+      return res.status(401).json({
+        error:        'invalid_token',
+        principle:    'P-010',
+        msg:          'Token verification failed — Ed25519 HMAC invalid or expired. Re-authenticate via /api/verify.',
+      });
+    }
+    // Extract payload (base64 portion before the dot) for expiry check at TWIN
+    tokenFingerprint = cross_platform_token.split('.')[0];
+  }
+
+  // Phase 20: Constitutional enforcement check via TWIN
+  const enforcement = await checkManifestEnforcement(node_id, 'signal', tokenFingerprint);
+  if (enforcement.permitted === false) {
+    return res.status(403).json({
+      error:        'enforcement_blocked',
+      reason:       enforcement.reason,
+      principle_id: enforcement.blocked_by,
+      msg:          'Data flow blocked by Manifest Constitutional Law',
+    });
+  }
+
+  // Phase 22: Contextual sentiment classification
+  const sentiment = classifySentiment(safeMsg);
+
   const post = registry.addPost({
     node_id,
     node_type: node.node_type || 'hardware',
     type:  'HUMAN_SIGNAL',
     msg:   safeMsg,
+    sentiment_context:    sentiment.context,
+    sentiment_confidence: sentiment.confidence,
   });
 
   broadcast('feed:post', post);
-  res.json({ ok: true, post });
+  res.json({ ok: true, post, sentiment_context: sentiment.context });
 });
 
 // ── Profile edit (bio, display name, avatar color) ────────────────
