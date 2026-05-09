@@ -1269,6 +1269,98 @@ app.post('/api/fleet/ota/batch', requireAuth, async (req, res) => {
   });
 });
 
+// ── Phase 36: Incident Simulation ────────────────────────────────────────────
+// POST /api/sim/inject  — synthetic heartbeat injection for a specific node.
+//   Body: { instance_id, scenario, overrides? }
+//   scenario: 'node_offline' | 'node_degraded' | 'version_mismatch' |
+//             'cpu_spike' | 'temp_alert' | 'self_test_fail' | 'custom'
+//   overrides: any valid heartbeat field (custom scenario only)
+//
+// POST /api/sim/reset   — clear all sim-injected entries from fleetHealth.
+// GET  /api/sim/status  — list active sim-injected instance_ids + scenarios.
+//
+// All three require X-Hub-Secret (reuse requireAuth).
+
+const SCENARIO_OVERRIDES = {
+  node_offline:    { dms_status: 'OFFLINE', online: false, self_test_passed: false },
+  node_degraded:   { dms_status: 'DEGRADED', cpu_pct: 88, temp_c: 79 },
+  version_mismatch:{ firmware_version: 'sim-skew-0.0.0', self_test_passed: false },
+  cpu_spike:       { cpu_pct: 97.5, dms_status: 'DEGRADED' },
+  temp_alert:      { temp_c: 91.0, dms_status: 'DEGRADED' },
+  self_test_fail:  { self_test_passed: false, dms_status: 'DEGRADED' },
+};
+
+// Track which instance_ids were injected and which scenario was used
+const simRegistry = new Map(); // instance_id → { scenario, injected_at }
+
+app.post('/api/sim/inject', requireAuth, (req, res) => {
+  const { instance_id, scenario, overrides } = req.body || {};
+  if (!instance_id || typeof instance_id !== 'string') {
+    return res.status(400).json({ error: 'instance_id required' });
+  }
+  const validScenarios = [...Object.keys(SCENARIO_OVERRIDES), 'custom'];
+  if (!scenario || !validScenarios.includes(scenario)) {
+    return res.status(400).json({ error: `scenario must be one of: ${validScenarios.join(', ')}` });
+  }
+  if (scenario === 'custom' && (!overrides || typeof overrides !== 'object')) {
+    return res.status(400).json({ error: 'overrides object required for custom scenario' });
+  }
+
+  // Merge into existing fleetHealth record (or create a minimal stub)
+  const existing  = fleetHealth.get(instance_id) || {
+    instance_id,
+    label:            `sim-${instance_id}`,
+    provisioned_label: null,
+    provisioned_at:   null,
+    firmware_version: 'unknown',
+    self_test_passed: false,
+    cpu_pct:          0,
+    temp_c:           25,
+    mem_pct:          0,
+    uptime_s:         0,
+    dms_status:       'UNKNOWN',
+    online:           true,
+  };
+
+  const patch     = scenario === 'custom' ? overrides : SCENARIO_OVERRIDES[scenario];
+  const injected  = {
+    ...existing,
+    ...patch,
+    sim_injected:  true,
+    last_heartbeat: Date.now(),
+    seconds_since_heartbeat: 0,
+  };
+
+  fleetHealth.set(instance_id, injected);
+  simRegistry.set(instance_id, { scenario, injected_at: Date.now() });
+
+  broadcast('sim:node_injected', { instance_id, scenario, record: injected });
+
+  res.json({ ok: true, instance_id, scenario, record: injected, ts: Date.now() });
+});
+
+app.post('/api/sim/reset', requireAuth, (req, res) => {
+  const cleared = [];
+  for (const [iid] of simRegistry) {
+    fleetHealth.delete(iid);
+    cleared.push(iid);
+  }
+  simRegistry.clear();
+
+  broadcast('sim:reset', { cleared_count: cleared.length, cleared_ids: cleared });
+  res.json({ ok: true, cleared_count: cleared.length, cleared_ids: cleared, ts: Date.now() });
+});
+
+app.get('/api/sim/status', requireAuth, (req, res) => {
+  const active = Array.from(simRegistry.entries()).map(([iid, meta]) => ({
+    instance_id:  iid,
+    scenario:     meta.scenario,
+    injected_at:  meta.injected_at,
+    current_record: fleetHealth.get(iid) || null,
+  }));
+  res.json({ ok: true, active_count: active.length, incidents: active, ts: Date.now() });
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
