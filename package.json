@@ -4,16 +4,17 @@
   "description": "NIT-IN: Node Identity Token — Integrated Network. Local hub for 20 Arduino Uno Q nodes. Birth_Rights Protocol v1.0",
   "main": "hub/server.js",
   "scripts": {
-    "start":   "node hub/server.js",
-    "sim":     "node hub/server.js --simulate",
+    "start": "node hub/server.js",
+    "sim": "node hub/server.js --simulate",
     "virtual": "node tools/virtual-node.js",
-    "virtual3":"node tools/virtual-node.js --count=3"
+    "virtual3": "node tools/virtual-node.js --count=3"
   },
   "dependencies": {
     "@serialport/parser-readline": "^12.0.0",
     "better-sqlite3": "^12.9.0",
     "express": "^4.18.2",
     "serialport": "^12.0.0",
+    "snarkjs": "^0.7.6",
     "stripe": "^14.25.0",
     "ws": "^8.14.2"
   }

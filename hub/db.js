@@ -71,6 +71,27 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_challenges_nit ON challenges(nit_id, created_at DESC);
 
+  -- Phase 28: ZK compliance proof commitments from Arduino Uno Q Linux core
+  CREATE TABLE IF NOT EXISTS zk_commitments (
+    id               TEXT    PRIMARY KEY,
+    principle_id     TEXT    NOT NULL,
+    batch_time_start INTEGER NOT NULL,
+    batch_time_end   INTEGER NOT NULL,
+    event_count      INTEGER NOT NULL,
+    blocked_count    INTEGER NOT NULL,
+    approved_count   INTEGER NOT NULL,
+    batch_commitment TEXT    NOT NULL,   -- Poseidon(principle_id_hash, time_start, time_end)
+    proof            TEXT    NOT NULL,   -- JSON: snarkjs Groth16 proof object
+    public_signals   TEXT    NOT NULL,   -- JSON: string[] of public signal field elements
+    verified         INTEGER NOT NULL DEFAULT 0,  -- 1 = NIT-IN re-ran verifier and passed
+    arduino_node_id  TEXT,
+    twin_instance    TEXT,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_zk_principle ON zk_commitments(principle_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_zk_verified  ON zk_commitments(verified, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_zk_node      ON zk_commitments(arduino_node_id, created_at DESC);
+
   CREATE TABLE IF NOT EXISTS platform_bindings (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     nit_id     TEXT    NOT NULL,
@@ -112,6 +133,18 @@ const S = {
 
   insertBinding:       db.prepare('INSERT OR IGNORE INTO platform_bindings (nit_id, platform) VALUES (?, ?)'),
   loadBindings:        db.prepare('SELECT platform, bound_at FROM platform_bindings WHERE nit_id = ? ORDER BY bound_at ASC'),
+
+  // Phase 28: ZK commitments
+  insertZkCommit:  db.prepare(`
+    INSERT OR IGNORE INTO zk_commitments
+      (id, principle_id, batch_time_start, batch_time_end, event_count, blocked_count, approved_count,
+       batch_commitment, proof, public_signals, verified, arduino_node_id, twin_instance)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+  updateZkVerified: db.prepare('UPDATE zk_commitments SET verified = ? WHERE id = ?'),
+  loadZkCommit:     db.prepare('SELECT * FROM zk_commitments WHERE id = ?'),
+  loadZkLog:        db.prepare('SELECT * FROM zk_commitments ORDER BY created_at DESC LIMIT ?'),
+  loadZkByPrinciple: db.prepare('SELECT * FROM zk_commitments WHERE principle_id = ? ORDER BY created_at DESC LIMIT ?'),
 };
 
 const FEED_CAP = 2000; // max rows kept in DB
@@ -201,6 +234,50 @@ module.exports = {
     return S.loadBindings.all(nit_id).map(r => ({
       platform: r.platform,
       bound_at: new Date(r.bound_at * 1000).toISOString(),
+    }));
+  },
+
+  // Phase 28: ZK commitment storage
+  saveZkCommit({ id, principle_id, batch_time_start, batch_time_end, event_count, blocked_count,
+                 batch_commitment, proof, public_signals, verified, arduino_node_id, twin_instance }) {
+    S.insertZkCommit.run(
+      id, principle_id, batch_time_start, batch_time_end,
+      event_count, blocked_count, event_count - blocked_count,
+      batch_commitment,
+      JSON.stringify(proof),
+      JSON.stringify(public_signals),
+      verified ? 1 : 0,
+      arduino_node_id || null,
+      twin_instance   || null,
+    );
+  },
+  markZkVerified(id, verified) {
+    S.updateZkVerified.run(verified ? 1 : 0, id);
+  },
+  loadZkCommit(id) {
+    const row = S.loadZkCommit.get(id);
+    if (!row) return null;
+    return {
+      ...row,
+      proof:          JSON.parse(row.proof),
+      public_signals: JSON.parse(row.public_signals),
+      created_at:     new Date(row.created_at * 1000).toISOString(),
+    };
+  },
+  loadZkLog(limit = 50) {
+    return S.loadZkLog.all(Math.min(limit, 200)).map(row => ({
+      ...row,
+      proof:          JSON.parse(row.proof),
+      public_signals: JSON.parse(row.public_signals),
+      created_at:     new Date(row.created_at * 1000).toISOString(),
+    }));
+  },
+  loadZkByPrinciple(principle_id, limit = 20) {
+    return S.loadZkByPrinciple.all(principle_id, Math.min(limit, 100)).map(row => ({
+      ...row,
+      proof:          JSON.parse(row.proof),
+      public_signals: JSON.parse(row.public_signals),
+      created_at:     new Date(row.created_at * 1000).toISOString(),
     }));
   },
 

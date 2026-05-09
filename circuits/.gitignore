@@ -1,0 +1,7 @@
+build/
+*.ptau
+*.r1cs
+*.sym
+*.wasm
+*_js/
+*_0000.zkey

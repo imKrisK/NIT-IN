@@ -288,7 +288,131 @@ app.get('/api/audit/log', requireAuth, (req, res) => {
   const items = type ? _auditLog.filter(r => r.audit_type === type) : _auditLog;
   res.json({ total: items.length, limit, items: items.slice(0, limit) });
 });
-// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Phase 28: ZK Compliance Proof endpoints ────────────────────────────────
+// Requires X-Hub-Secret (same as requireAuth).
+
+const zk = require('./zk');
+
+// POST /api/audit/zk-commit
+// Arduino Linux core posts proof + public_signals here after each 30-min batch.
+// NIT-IN verifies on receipt and stores commitment.
+// Body: { proof, public_signals, metadata: { principle_id, arduino_node_id, ... } }
+app.post('/api/audit/zk-commit', requireAuth, async (req, res) => {
+  const { ok, error } = zk.validateCommitBody(req.body);
+  if (!ok) return res.status(400).json({ error });
+
+  const { proof, public_signals, metadata } = req.body;
+
+  // Re-run verifier on NIT-IN side (not just trusting the prover)
+  let verified = false;
+  if (zk.artifactsReady()) {
+    try {
+      verified = await zk.verifyCompliance(proof, public_signals);
+    } catch (err) {
+      console.error('[ZK-COMMIT] Verification error:', err.message);
+    }
+  } else {
+    console.warn('[ZK-COMMIT] ZK artifacts not built — storing proof without server-side verify');
+  }
+
+  // public_signals order: [principle_id_hash, time_start, time_end, event_count, blocked_count, batch_commitment]
+  const batchCommitment = public_signals[5] || '';
+  const commitmentId    = `zk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  db.saveZkCommit({
+    id:               commitmentId,
+    principle_id:     metadata.principle_id,
+    batch_time_start: Number(metadata.batch_time_start || public_signals[1]) || 0,
+    batch_time_end:   Number(metadata.batch_time_end   || public_signals[2]) || 0,
+    event_count:      Number(metadata.event_count      || public_signals[3]) || 0,
+    blocked_count:    Number(metadata.blocked_count    || public_signals[4]) || 0,
+    batch_commitment: batchCommitment,
+    proof,
+    public_signals,
+    verified,
+    arduino_node_id:  metadata.arduino_node_id  || null,
+    twin_instance:    metadata.twin_instance     || null,
+  });
+
+  // Broadcast to operator WebSocket dashboard
+  broadcast('zk:commit', {
+    commitment_id:    commitmentId,
+    principle_id:     metadata.principle_id,
+    arduino_node_id:  metadata.arduino_node_id,
+    event_count:      metadata.event_count,
+    blocked_count:    metadata.blocked_count,
+    verified,
+    batch_commitment: batchCommitment,
+    ts:               new Date().toISOString(),
+  });
+
+  console.log(`[ZK-COMMIT] ${commitmentId} — principle=${metadata.principle_id} ` +
+              `node=${metadata.arduino_node_id} events=${metadata.event_count} ` +
+              `blocked=${metadata.blocked_count} verified=${verified}`);
+
+  res.json({
+    commitment_id:    commitmentId,
+    verified,
+    artifacts_ready:  zk.artifactsReady(),
+    ts:               new Date().toISOString(),
+  });
+});
+
+// GET /api/audit/zk-verify/:id
+// Re-run Groth16 verifier against a stored commitment. Returns { verified: bool }.
+app.get('/api/audit/zk-verify/:id', requireAuth, async (req, res) => {
+  const record = db.loadZkCommit(req.params.id);
+  if (!record) return res.status(404).json({ error: 'commitment not found' });
+
+  if (!zk.artifactsReady()) {
+    return res.status(503).json({
+      error:           'ZK artifacts not built on this server',
+      commitment_id:   record.id,
+      stored_verified: record.verified === 1,
+    });
+  }
+
+  let verified = false;
+  try {
+    verified = await zk.verifyCompliance(record.proof, record.public_signals);
+  } catch (err) {
+    return res.status(500).json({ error: 'verifier error: ' + err.message });
+  }
+
+  // Persist updated verified state
+  db.markZkVerified(record.id, verified);
+
+  res.json({
+    commitment_id:    record.id,
+    principle_id:     record.principle_id,
+    arduino_node_id:  record.arduino_node_id,
+    verified,
+    batch_commitment: record.batch_commitment,
+    event_count:      record.event_count,
+    blocked_count:    record.blocked_count,
+    batch_time_start: record.batch_time_start,
+    batch_time_end:   record.batch_time_end,
+    created_at:       record.created_at,
+  });
+});
+
+// GET /api/audit/zk-log?limit=50&principle_id=P-009
+// List recent ZK commitments for the operator dashboard.
+app.get('/api/audit/zk-log', requireAuth, (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const principleId = (req.query.principle_id || '').trim();
+  const items = principleId
+    ? db.loadZkByPrinciple(principleId, limit)
+    : db.loadZkLog(limit);
+  // Strip full proof from list view — available via /zk-verify/:id
+  const slim = items.map(({ proof, public_signals, ...rest }) => ({
+    ...rest,
+    public_signals_count: Array.isArray(public_signals) ? public_signals.length : 0,
+  }));
+  res.json({ total: slim.length, items: slim });
+});
+// ────────────────────────────────────────────────────────────────────────────
 
 // Onboard page
 app.get('/onboard', (_req, res) => res.sendFile(path.join(__dirname, '../public/onboard.html')));
