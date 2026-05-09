@@ -1183,6 +1183,92 @@ app.post('/api/fleet/ota/request', requireAuth, async (req, res) => {
   });
 });
 
+// ── Phase 35: Batch OTA Gate (canary deploy + emergency revert) ───────────────
+// Accepts a list of instance_ids (resolved by TWIN from label_prefix or explicit).
+// Runs the same self_test_passed gate per node; collects per-node results.
+// broadcast 'ota:batch_initiated' summarises ok/blocked/not_found counts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/fleet/ota/batch', requireAuth, async (req, res) => {
+  const body         = req.body || {};
+  const instance_ids = Array.isArray(body.instance_ids) ? body.instance_ids : [];
+  const use_previous = body.use_previous === true;
+
+  if (instance_ids.length === 0) {
+    return res.status(400).json({ error: 'instance_ids array is required and must not be empty' });
+  }
+
+  const twinBase = process.env.TWIN_BASE_URL      || 'https://twin.conversationmine.ai';
+  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
+
+  // Fetch firmware once for the whole batch
+  let firmware;
+  try {
+    const fwRes  = await fetch(`${twinBase}/api/governance/firmware/latest`, {
+      headers: { 'X-Twin-Key': twinKey },
+    });
+    if (!fwRes.ok) throw new Error(`TWIN HTTP ${fwRes.status}`);
+    const fwData = await fwRes.json();
+    firmware     = use_previous ? fwData.previous_stable : fwData.latest_stable;
+    if (!firmware) throw new Error(use_previous ? 'no previous_stable firmware' : 'no latest_stable firmware');
+  } catch (e) {
+    return res.status(502).json({ error: `twin_firmware_fetch_failed: ${e.message}` });
+  }
+
+  const signed_at = new Date().toISOString();
+  const results   = [];
+  let ok_count = 0, blocked_count = 0, not_found_count = 0;
+
+  for (const instance_id of instance_ids) {
+    const node = fleetHealth.get(String(instance_id));
+    if (!node) {
+      not_found_count++;
+      results.push({ instance_id, ok: false, error: 'not_found — no heartbeat received' });
+      continue;
+    }
+    if (!node.self_test_passed) {
+      blocked_count++;
+      results.push({
+        instance_id, ok: false,
+        error: 'self_test_gate_blocked',
+        current_dms_status: node.dms_status,
+      });
+      continue;
+    }
+    ok_count++;
+    results.push({
+      instance_id,
+      ok:              true,
+      label:           node.label,
+      current_version: node.firmware_version,
+      target_version:  firmware.version,
+      download_url:    firmware.download_url,
+      sha256:          firmware.sha256,
+      signed_at,
+    });
+  }
+
+  broadcast('ota:batch_initiated', {
+    ok_count,
+    blocked_count,
+    not_found_count,
+    target_version: firmware.version,
+    use_previous,
+    signed_at,
+  });
+
+  res.json({
+    ok:              true,
+    target_version:  firmware.version,
+    use_previous,
+    ok_count,
+    blocked_count,
+    not_found_count,
+    results,
+    signed_at,
+  });
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
