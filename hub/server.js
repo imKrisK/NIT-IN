@@ -173,6 +173,40 @@ app.get('/api/graph',  (_req, res) => res.json(registry.getGraphData()));
 app.get('/api/stats',   (_req, res) => res.json(registry.getStats()));
 app.get('/api/peers',   (_req, res) => res.json(federation.getPeers()));
 
+// Phase 31 — Federation cluster registry (LAN UDP peers + TWIN HTTP subscribers)
+// Merges NIT-IN's local UDP peer list with the TWIN governance federation registry.
+app.get('/api/federation/clusters', async (_req, res) => {
+  const udpPeers   = federation.getPeers();
+  const twinBase   = process.env.TWIN_BASE_URL || '';
+  const twinSecret = process.env.TWIN_SHARED_SECRET || '';
+  let   twinPeers  = [];
+
+  if (twinBase && twinSecret) {
+    try {
+      const resp = await fetch(`${twinBase}/api/governance/federation/peers`, {
+        headers: { 'X-Twin-Key': twinSecret },
+        signal:  AbortSignal.timeout(6000),
+      });
+      if (resp.ok) {
+        const body = await resp.json();
+        twinPeers  = body.peers || [];
+      }
+    } catch (err) {
+      console.warn('[Federation] TWIN peer fetch failed:', err.message);
+    }
+  }
+
+  res.json({
+    hub_id:           federation.HUB_ID,
+    lan_peers:        udpPeers,
+    lan_peer_count:   udpPeers.length,
+    twin_clusters:    twinPeers,
+    twin_cluster_count: twinPeers.length,
+    total_mesh_size:  udpPeers.length + twinPeers.length + 1,
+    ts:               new Date().toISOString(),
+  });
+});
+
 // Combined network snapshot (local + federation)
 app.get('/api/network', (_req, res) => {
   const stats = registry.getStats();
