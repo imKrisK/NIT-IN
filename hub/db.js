@@ -84,6 +84,9 @@ db.exec(`
     proof            TEXT    NOT NULL,   -- JSON: snarkjs Groth16 proof object
     public_signals   TEXT    NOT NULL,   -- JSON: string[] of public signal field elements
     verified         INTEGER NOT NULL DEFAULT 0,  -- 1 = NIT-IN re-ran verifier and passed
+    circuit_vkey_hash TEXT,             -- SHA-256 of verification_key.json used by prover
+    hub_vkey_hash     TEXT,             -- SHA-256 of verification_key.json on Hub at commit time
+    vkey_match        INTEGER NOT NULL DEFAULT 0, -- 1 = hashes matched (no desync)
     arduino_node_id  TEXT,
     twin_instance    TEXT,
     created_at       INTEGER NOT NULL DEFAULT (unixepoch())
@@ -101,6 +104,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_bindings_nit ON platform_bindings(nit_id);
 `);
+
+// Phase 28.1 migration — add vkey hash columns to existing zk_commitments rows.
+// ALTER TABLE IF NOT EXISTS COLUMN is unavailable pre-SQLite 3.37 — use pragma introspection.
+{
+  const cols = db.pragma('table_info(zk_commitments)').map(c => c.name);
+  if (!cols.includes('circuit_vkey_hash')) {
+    db.exec("ALTER TABLE zk_commitments ADD COLUMN circuit_vkey_hash TEXT");
+    db.exec("ALTER TABLE zk_commitments ADD COLUMN hub_vkey_hash TEXT");
+    db.exec("ALTER TABLE zk_commitments ADD COLUMN vkey_match INTEGER NOT NULL DEFAULT 0");
+    console.log('[DB] Migrated zk_commitments: added circuit_vkey_hash, hub_vkey_hash, vkey_match');
+  }
+}
 
 // ── Prepared statements ───────────────────────────────────────────
 const S = {
@@ -138,8 +153,9 @@ const S = {
   insertZkCommit:  db.prepare(`
     INSERT OR IGNORE INTO zk_commitments
       (id, principle_id, batch_time_start, batch_time_end, event_count, blocked_count, approved_count,
-       batch_commitment, proof, public_signals, verified, arduino_node_id, twin_instance)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       batch_commitment, proof, public_signals, verified, circuit_vkey_hash, hub_vkey_hash, vkey_match,
+       arduino_node_id, twin_instance)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   updateZkVerified: db.prepare('UPDATE zk_commitments SET verified = ? WHERE id = ?'),
   loadZkCommit:     db.prepare('SELECT * FROM zk_commitments WHERE id = ?'),
@@ -239,7 +255,8 @@ module.exports = {
 
   // Phase 28: ZK commitment storage
   saveZkCommit({ id, principle_id, batch_time_start, batch_time_end, event_count, blocked_count,
-                 batch_commitment, proof, public_signals, verified, arduino_node_id, twin_instance }) {
+                 batch_commitment, proof, public_signals, verified, circuit_vkey_hash, hub_vkey_hash,
+                 vkey_match, arduino_node_id, twin_instance }) {
     S.insertZkCommit.run(
       id, principle_id, batch_time_start, batch_time_end,
       event_count, blocked_count, event_count - blocked_count,
@@ -247,8 +264,11 @@ module.exports = {
       JSON.stringify(proof),
       JSON.stringify(public_signals),
       verified ? 1 : 0,
-      arduino_node_id || null,
-      twin_instance   || null,
+      circuit_vkey_hash || null,
+      hub_vkey_hash     || null,
+      vkey_match        ? 1 : 0,
+      arduino_node_id   || null,
+      twin_instance     || null,
     );
   },
   markZkVerified(id, verified) {

@@ -80,9 +80,14 @@ const DRY_RUN       = !!argv['dry-run'];
 function loadArtifacts() {
   const wasmPath = path.join(ZK_BUILD_DIR, 'compliance_batch_js', 'compliance_batch.wasm');
   const zkeyPath = path.join(ZK_BUILD_DIR, 'compliance_batch_final.zkey');
+  const vkeyPath = path.join(ZK_BUILD_DIR, 'verification_key.json');
   if (!fs.existsSync(wasmPath)) throw new Error(`WASM not found: ${wasmPath}\nRun scripts/zk_setup.sh first.`);
   if (!fs.existsSync(zkeyPath)) throw new Error(`zkey not found: ${zkeyPath}\nRun scripts/zk_setup.sh first.`);
-  return { wasmPath, zkeyPath };
+  // Compute vkey_hash so NIT-IN can detect circuit desync (Phase 28.1)
+  const vkeyHash = fs.existsSync(vkeyPath)
+    ? createHash('sha256').update(fs.readFileSync(vkeyPath)).digest('hex')
+    : null;
+  return { wasmPath, zkeyPath, vkeyHash };
 }
 
 // ── Ring buffer ──────────────────────────────────────────────────────────────
@@ -159,12 +164,12 @@ function buildWitness(events, batchTimeStart, batchTimeEnd) {
 // ── Prover ───────────────────────────────────────────────────────────────────
 
 async function prove(witness) {
-  const { wasmPath, zkeyPath } = loadArtifacts();
+  const { wasmPath, zkeyPath, vkeyHash } = loadArtifacts();
   console.log('[PROVER] Generating Groth16 proof...');
   const t0 = Date.now();
   const { proof, publicSignals } = await snarkjs.groth16.fullProve(witness, wasmPath, zkeyPath);
   console.log(`[PROVER] Proof generated in ${Date.now() - t0}ms`);
-  return { proof, publicSignals };
+  return { proof, publicSignals, vkeyHash };
 }
 
 // ── NIT-IN POST ──────────────────────────────────────────────────────────────
@@ -228,9 +233,9 @@ async function runBatch() {
 
   const witness = buildWitness(events, batchTimeStart, batchTimeEnd);
 
-  let proof, publicSignals;
+  let proof, publicSignals, vkeyHash;
   try {
-    ({ proof, publicSignals } = await prove(witness));
+    ({ proof, publicSignals, vkeyHash } = await prove(witness));
   } catch (err) {
     console.error('[PROVER] Proof generation failed:', err.message);
     return;
@@ -240,13 +245,14 @@ async function runBatch() {
     proof,
     public_signals: publicSignals,
     metadata: {
-      principle_id:    PRINCIPLE_ID,
-      arduino_node_id: NODE_ID,
-      batch_time_start: batchTimeStart,
-      batch_time_end:   batchTimeEnd,
-      event_count:      events.length,
-      blocked_count:    events.filter(e => e.verdict === 'BLOCKED').length,
-      m4_sequence:      ringBuf.m4_sequence || 0,
+      principle_id:      PRINCIPLE_ID,
+      arduino_node_id:   NODE_ID,
+      batch_time_start:  batchTimeStart,
+      batch_time_end:    batchTimeEnd,
+      event_count:       events.length,
+      blocked_count:     events.filter(e => e.verdict === 'BLOCKED').length,
+      m4_sequence:       ringBuf.m4_sequence || 0,
+      circuit_vkey_hash: vkeyHash || '',   // Phase 28.1: Artifact Desync Guard
     },
   };
 

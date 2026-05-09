@@ -297,14 +297,42 @@ const zk = require('./zk');
 // POST /api/audit/zk-commit
 // Arduino Linux core posts proof + public_signals here after each 30-min batch.
 // NIT-IN verifies on receipt and stores commitment.
-// Body: { proof, public_signals, metadata: { principle_id, arduino_node_id, ... } }
+// Body: { proof, public_signals, metadata: { principle_id, arduino_node_id,
+//         circuit_vkey_hash, ... } }
+//
+// Phase 28.1 — Artifact Desync Guard:
+//   metadata.circuit_vkey_hash must match the Hub's ratified verification_key.json.
+//   Mismatch → 409 VK_MISMATCH. The proof is NOT stored (it cannot be verified).
 app.post('/api/audit/zk-commit', requireAuth, async (req, res) => {
   const { ok, error } = zk.validateCommitBody(req.body);
   if (!ok) return res.status(400).json({ error });
 
   const { proof, public_signals, metadata } = req.body;
 
-  // Re-run verifier on NIT-IN side (not just trusting the prover)
+  // ── Artifact Desync Guard ──────────────────────────────────────────
+  const hubHash    = zk.getHubVkeyHash();
+  const proverHash = (metadata.circuit_vkey_hash || '').toLowerCase();
+  const vkeyCheck  = zk.checkVkeyHash(proverHash);
+
+  if (hubHash && proverHash && !vkeyCheck.match) {
+    console.error(
+      `[ZK-COMMIT] VK_MISMATCH — node=${metadata.arduino_node_id} ` +
+      `prover_hash=${proverHash.slice(0,16)}… hub_hash=${hubHash.slice(0,16)}…`
+    );
+    return res.status(409).json({
+      error:         'VK_MISMATCH',
+      detail:        'The circuit verification key used by the prover does not match the Hub\'s ratified key. ' +
+                     'Re-run scripts/zk_setup.sh and re-sync circuits/build/ to the Arduino Linux core.',
+      prover_hash:   proverHash.slice(0, 16) + '…',
+      hub_hash:      hubHash.slice(0, 16) + '…',
+    });
+  }
+
+  if (!proverHash) {
+    console.warn(`[ZK-COMMIT] No circuit_vkey_hash in metadata — accepting but flagging vkey_match=false`);
+  }
+
+  // ── Cryptographic verification ─────────────────────────────────────
   let verified = false;
   if (zk.artifactsReady()) {
     try {
@@ -331,6 +359,9 @@ app.post('/api/audit/zk-commit', requireAuth, async (req, res) => {
     proof,
     public_signals,
     verified,
+    circuit_vkey_hash: proverHash || null,
+    hub_vkey_hash:     hubHash    || null,
+    vkey_match:        vkeyCheck.match,
     arduino_node_id:  metadata.arduino_node_id  || null,
     twin_instance:    metadata.twin_instance     || null,
   });
@@ -343,17 +374,19 @@ app.post('/api/audit/zk-commit', requireAuth, async (req, res) => {
     event_count:      metadata.event_count,
     blocked_count:    metadata.blocked_count,
     verified,
+    vkey_match:       vkeyCheck.match,
     batch_commitment: batchCommitment,
     ts:               new Date().toISOString(),
   });
 
   console.log(`[ZK-COMMIT] ${commitmentId} — principle=${metadata.principle_id} ` +
               `node=${metadata.arduino_node_id} events=${metadata.event_count} ` +
-              `blocked=${metadata.blocked_count} verified=${verified}`);
+              `blocked=${metadata.blocked_count} verified=${verified} vkey_match=${vkeyCheck.match}`);
 
   res.json({
     commitment_id:    commitmentId,
     verified,
+    vkey_match:       vkeyCheck.match,
     artifacts_ready:  zk.artifactsReady(),
     ts:               new Date().toISOString(),
   });
