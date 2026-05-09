@@ -1083,6 +1083,7 @@ app.post('/api/fleet/heartbeat', requireAuth, (req, res) => {
     dms_status:       DMS_VALID.has(body.dms_status) ? body.dms_status : 'UNKNOWN',
     uptime_s:         parseInt(body.uptime_s)     || 0,
     firmware_version: String(body.firmware_version ?? '').slice(0, 32) || null,
+    self_test_passed: body.self_test_passed === true,
     extra:            (body.extra && typeof body.extra === 'object') ? body.extra : {},
     reported_at:      new Date().toISOString(),
     reported_epoch:   Math.floor(Date.now() / 1000),
@@ -1118,6 +1119,67 @@ app.get('/api/fleet/nodes', requireAuth, (req, res) => {
     stale_threshold_s: staleThreshold,
     nodes,
     ts: new Date().toISOString(),
+  });
+});
+
+// ── Phase 34: OTA Request Gate ────────────────────────────────────────────────
+// Hardware nodes request an OTA update via this endpoint (called by TWIN relay
+// from the Manifest UI).  Gate: node must have self_test_passed=true in its
+// latest heartbeat.  TWIN firmware registry supplies the signed download URL.
+// 'ota:initiated' is broadcast over WebSocket to all connected operators.
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/fleet/ota/request', requireAuth, async (req, res) => {
+  const body        = req.body || {};
+  const instance_id = String(body.instance_id || '').trim();
+  if (!instance_id) return res.status(400).json({ error: 'instance_id required' });
+
+  const node = fleetHealth.get(instance_id);
+  if (!node) {
+    return res.status(404).json({ error: 'node not found — send a heartbeat first' });
+  }
+  if (!node.self_test_passed) {
+    return res.status(403).json({
+      error: 'self_test_passed must be true before OTA is released',
+      instance_id,
+      current_dms_status: node.dms_status,
+    });
+  }
+
+  const twinBase = process.env.TWIN_BASE_URL      || 'https://twin.conversationmine.ai';
+  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
+  let firmware;
+  try {
+    const fwRes  = await fetch(`${twinBase}/api/governance/firmware/latest`, {
+      headers: { 'X-Twin-Key': twinKey },
+    });
+    if (!fwRes.ok) throw new Error(`TWIN HTTP ${fwRes.status}`);
+    const fwData = await fwRes.json();
+    firmware     = fwData.latest_stable;
+    if (!firmware) throw new Error('no firmware published yet');
+  } catch (e) {
+    return res.status(502).json({ error: `twin_firmware_fetch_failed: ${e.message}` });
+  }
+
+  const signed_at = new Date().toISOString();
+  broadcast('ota:initiated', {
+    instance_id,
+    label:          node.label,
+    from_version:   node.firmware_version,
+    target_version: firmware.version,
+    signed_at,
+  });
+
+  res.json({
+    ok:              true,
+    instance_id,
+    label:           node.label,
+    current_version: node.firmware_version,
+    target_version:  firmware.version,
+    download_url:    firmware.download_url,
+    sha256:          firmware.sha256,
+    release_notes:   firmware.release_notes,
+    signed_at,
   });
 });
 
