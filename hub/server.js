@@ -1361,6 +1361,28 @@ app.get('/api/sim/status', requireAuth, (req, res) => {
   res.json({ ok: true, active_count: active.length, incidents: active, ts: Date.now() });
 });
 
+// ── Phase 38: Per-node forensic snapshot ─────────────────────────────────────
+// GET /api/fleet/nodes/:instance_id/snapshot
+// Returns the single node's live fleetHealth record at the moment of the call.
+// Used by TWIN sim_inject() to capture "black box" state into incident_opened
+// audit entries.  Returns 404 if the instance_id is not in fleetHealth.
+app.get('/api/fleet/nodes/:instance_id/snapshot', requireAuth, (req, res) => {
+  const record = fleetHealth.get(req.params.instance_id);
+  if (!record) {
+    return res.status(404).json({
+      error:       'node_not_found',
+      instance_id: req.params.instance_id,
+      ts:          Date.now(),
+    });
+  }
+  res.json({
+    ok:          true,
+    instance_id: req.params.instance_id,
+    snapshot:    record,
+    ts:          Date.now(),
+  });
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
