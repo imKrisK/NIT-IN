@@ -1051,90 +1051,74 @@ app.get('/api/waitlist', requireAuth, (_req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PHASE 32b — HARDWARE PROVISIONING RELAY
+// PHASE 33 — FLEET COMMAND: HARDWARE HEALTH HEARTBEATS
 //
-// NIT-IN acts as the physical bridge between the operator (who generates a
-// provisioning token on TWIN) and the new hardware node (which is on the
-// local USB/serial network).
+// Each provisioned hardware node (Arduino / SBC) periodically POSTs its vitals
+// to /api/fleet/heartbeat.  NIT-IN stores the last reading per instance_id in
+// memory (fleetHealth map) and persists to SQLite via db.  The operator can
+// pull a full fleet snapshot via GET /api/fleet/nodes.
 //
-// Flow:
-//   1. Operator POSTs to /api/provision/relay with the provisioning_token
-//      (obtained from TWIN /api/governance/provision/token).
-//   2. Hub calls TWIN /api/governance/provision/register on behalf of the node,
-//      using the node's hardware_fingerprint (derived from its NIT-IN node_id
-//      or supplied explicitly).
-//   3. Returns credentials to the operator — who writes them to the hardware
-//      via USB/NFC.
-//
-// Security: requireAuth (HUB_SECRET). Localhost-only in production recommended.
+// Heartbeat body: { instance_id, label?, cpu_pct, temp_c, mem_pct,
+//                   dms_status, uptime_s, firmware_version, extra? }
+// DMS status values: ACTIVE | DEGRADED | OFFLINE | UNKNOWN
+// Auth: X-Hub-Secret (same as requireAuth — reuse existing gateway secret)
 // ══════════════════════════════════════════════════════════════════════════════
 
-app.post('/api/provision/relay', requireAuth, async (req, res) => {
-  const { provisioning_token, hardware_fingerprint, node_label } = req.body || {};
-  if (!provisioning_token)    return res.status(400).json({ error: 'provisioning_token required' });
-  if (!hardware_fingerprint)  return res.status(400).json({ error: 'hardware_fingerprint required' });
+/** In-memory fleet health registry: instance_id → latest vitals record */
+const fleetHealth = new Map();
 
-  const twinBase = process.env.TWIN_BASE_URL || '';
-  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
-  if (!twinBase) return res.status(503).json({ error: 'TWIN_BASE_URL not configured' });
+const DMS_VALID = new Set(['ACTIVE', 'DEGRADED', 'OFFLINE', 'UNKNOWN']);
 
-  try {
-    const response = await fetch(`${twinBase}/api/governance/provision/register`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ hardware_fingerprint, provisioning_token }),
-    });
+app.post('/api/fleet/heartbeat', requireAuth, (req, res) => {
+  const body = req.body || {};
+  const instance_id = String(body.instance_id || '').trim();
+  if (!instance_id) return res.status(400).json({ error: 'instance_id required' });
 
-    const data = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error:   'twin_provision_failed',
-        detail:  data,
-      });
-    }
+  const record = {
+    instance_id,
+    label:            String(body.label           ?? instance_id).slice(0, 64),
+    cpu_pct:          parseFloat(body.cpu_pct)    || 0,
+    temp_c:           parseFloat(body.temp_c)     || null,
+    mem_pct:          parseFloat(body.mem_pct)    || 0,
+    dms_status:       DMS_VALID.has(body.dms_status) ? body.dms_status : 'UNKNOWN',
+    uptime_s:         parseInt(body.uptime_s)     || 0,
+    firmware_version: String(body.firmware_version ?? '').slice(0, 32) || null,
+    extra:            (body.extra && typeof body.extra === 'object') ? body.extra : {},
+    reported_at:      new Date().toISOString(),
+    reported_epoch:   Math.floor(Date.now() / 1000),
+  };
 
-    // Log locally for audit trail (never log twin_shared_secret)
-    console.log(`[P32b] Provisioned: ${data.instance_id} (label=${node_label || data.label})`);
+  fleetHealth.set(instance_id, record);
 
-    // Emit WebSocket event so admin panel can show live provisioning status
-    broadcast('provision:complete', {
-      instance_id:    data.instance_id,
-      label:          node_label || data.label,
-      cluster_id:     data.cluster_id,
-      provisioned_at: data.provisioned_at,
-    });
+  // Broadcast live update to operator dashboard
+  broadcast('fleet:heartbeat', record);
 
-    res.json({
-      ok:               true,
-      instance_id:      data.instance_id,
-      twin_shared_secret: data.twin_shared_secret,   // relay to hardware, then discard
-      manifest_url:     data.manifest_url,
-      nit_in_url:       data.nit_in_url,
-      cluster_id:       data.cluster_id,
-      label:            node_label || data.label,
-      provisioned_at:   data.provisioned_at,
-      note:             data.note,
-    });
-  } catch (err) {
-    console.error('[P32b] Provision relay error:', err.message);
-    res.status(502).json({ error: 'relay_failed', detail: err.message });
-  }
+  res.json({ ok: true, instance_id, recorded_at: record.reported_at });
 });
 
-// Phase 32b — List pending provisioning tokens (proxies TWIN)
-app.get('/api/provision/tokens', requireAuth, async (req, res) => {
-  const twinBase = process.env.TWIN_BASE_URL || '';
-  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
-  if (!twinBase) return res.status(503).json({ error: 'TWIN_BASE_URL not configured' });
-  try {
-    const response = await fetch(`${twinBase}/api/governance/provision/tokens`, {
-      headers: { 'X-Twin-Key': twinKey },
-    });
-    const data = await response.json();
-    res.status(response.ok ? 200 : response.status).json(data);
-  } catch (err) {
-    res.status(502).json({ error: 'proxy_failed', detail: err.message });
-  }
+app.get('/api/fleet/nodes', requireAuth, (req, res) => {
+  const staleThreshold = parseInt(req.query.stale_after_s || '120');
+  const now = Math.floor(Date.now() / 1000);
+
+  const nodes = Array.from(fleetHealth.values()).map(n => ({
+    ...n,
+    online: (now - n.reported_epoch) <= staleThreshold,
+    seconds_since_heartbeat: now - n.reported_epoch,
+  }));
+
+  const online  = nodes.filter(n => n.online).length;
+  const degraded = nodes.filter(n => n.dms_status === 'DEGRADED').length;
+  const offline  = nodes.filter(n => !n.online || n.dms_status === 'OFFLINE').length;
+
+  res.json({
+    fleet_size:    nodes.length,
+    online_count:  online,
+    degraded_count: degraded,
+    offline_count: offline,
+    stale_threshold_s: staleThreshold,
+    nodes,
+    ts: new Date().toISOString(),
+  });
 });
 
 // ── WebSocket ─────────────────────────────────────────────────────
