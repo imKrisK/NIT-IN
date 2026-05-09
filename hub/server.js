@@ -1050,6 +1050,93 @@ app.get('/api/waitlist', requireAuth, (_req, res) => {
   res.json(db.loadWaitlist());
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PHASE 32b — HARDWARE PROVISIONING RELAY
+//
+// NIT-IN acts as the physical bridge between the operator (who generates a
+// provisioning token on TWIN) and the new hardware node (which is on the
+// local USB/serial network).
+//
+// Flow:
+//   1. Operator POSTs to /api/provision/relay with the provisioning_token
+//      (obtained from TWIN /api/governance/provision/token).
+//   2. Hub calls TWIN /api/governance/provision/register on behalf of the node,
+//      using the node's hardware_fingerprint (derived from its NIT-IN node_id
+//      or supplied explicitly).
+//   3. Returns credentials to the operator — who writes them to the hardware
+//      via USB/NFC.
+//
+// Security: requireAuth (HUB_SECRET). Localhost-only in production recommended.
+// ══════════════════════════════════════════════════════════════════════════════
+
+app.post('/api/provision/relay', requireAuth, async (req, res) => {
+  const { provisioning_token, hardware_fingerprint, node_label } = req.body || {};
+  if (!provisioning_token)    return res.status(400).json({ error: 'provisioning_token required' });
+  if (!hardware_fingerprint)  return res.status(400).json({ error: 'hardware_fingerprint required' });
+
+  const twinBase = process.env.TWIN_BASE_URL || '';
+  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
+  if (!twinBase) return res.status(503).json({ error: 'TWIN_BASE_URL not configured' });
+
+  try {
+    const response = await fetch(`${twinBase}/api/governance/provision/register`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ hardware_fingerprint, provisioning_token }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error:   'twin_provision_failed',
+        detail:  data,
+      });
+    }
+
+    // Log locally for audit trail (never log twin_shared_secret)
+    console.log(`[P32b] Provisioned: ${data.instance_id} (label=${node_label || data.label})`);
+
+    // Emit WebSocket event so admin panel can show live provisioning status
+    broadcast('provision:complete', {
+      instance_id:    data.instance_id,
+      label:          node_label || data.label,
+      cluster_id:     data.cluster_id,
+      provisioned_at: data.provisioned_at,
+    });
+
+    res.json({
+      ok:               true,
+      instance_id:      data.instance_id,
+      twin_shared_secret: data.twin_shared_secret,   // relay to hardware, then discard
+      manifest_url:     data.manifest_url,
+      nit_in_url:       data.nit_in_url,
+      cluster_id:       data.cluster_id,
+      label:            node_label || data.label,
+      provisioned_at:   data.provisioned_at,
+      note:             data.note,
+    });
+  } catch (err) {
+    console.error('[P32b] Provision relay error:', err.message);
+    res.status(502).json({ error: 'relay_failed', detail: err.message });
+  }
+});
+
+// Phase 32b — List pending provisioning tokens (proxies TWIN)
+app.get('/api/provision/tokens', requireAuth, async (req, res) => {
+  const twinBase = process.env.TWIN_BASE_URL || '';
+  const twinKey  = process.env.TWIN_SHARED_SECRET || '';
+  if (!twinBase) return res.status(503).json({ error: 'TWIN_BASE_URL not configured' });
+  try {
+    const response = await fetch(`${twinBase}/api/governance/provision/tokens`, {
+      headers: { 'X-Twin-Key': twinKey },
+    });
+    const data = await response.json();
+    res.status(response.ok ? 200 : response.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'proxy_failed', detail: err.message });
+  }
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────
 
 const wss = new WebSocketServer({ server });
