@@ -52,6 +52,7 @@ import os
 import pathlib
 import platform
 import signal
+import subprocess
 import sys
 import time
 import urllib.request
@@ -84,17 +85,122 @@ logging.basicConfig(
 log = logging.getLogger("node_bridge")
 
 # ── Constants / defaults ───────────────────────────────────────────────────────
-_DEFAULT_HUB       = "https://nit-in.conversationmine.ai"
-_DEFAULT_PORT      = "/dev/ttyACM0"
-_DEFAULT_BAUD      = 9600
-_DEFAULT_LOCK_FILE = "/opt/nit-in/IDENTITY_LOCKED"
-_USER_AGENT        = "TWIN-Mesh/1.0"
+_DEFAULT_HUB          = "https://nit-in.conversationmine.ai"
+_DEFAULT_PORT         = "/dev/ttyACM0"
+_DEFAULT_BAUD         = 9600
+_DEFAULT_LOCK_FILE    = "/opt/nit-in/IDENTITY_LOCKED"
+_USER_AGENT           = "TWIN-Mesh/1.0"
+_DEFAULT_NTP_TIMEOUT  = 120   # seconds to wait for NTP sync
+_NTP_POLL_INTERVAL    = 5    # seconds between timedatectl checks
 
 _HEARTBEAT_ENDPOINT = "/api/fleet/heartbeat"
 
 # ── Config ────────────────────────────────────────────────────────────────────
 def _cfg(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NTP temporal gate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class NtpGate:
+    """
+    Phase 32b — Temporal Gate.
+
+    The Arduino Uno Q has no battery-backed RTC.  On power-on the Linux core
+    clock often starts at 1970-01-01 until NTP sync completes.  If the first
+    heartbeat is sent with an unsynchronised system clock, TWIN's Phase 40.0
+    zone timer may receive a corrupted epoch, producing a massive negative
+    zone_duration_s and crashing the MTTS Slope Analyzer.
+
+    Strategy
+    --------
+    1. Call `timedatectl show --property=NTPSynchronized` (systemd) or
+       fall back to parsing `timedatectl status` for systems that do not
+       support the `show` sub-command.
+    2. If the system is not systemd-based (macOS / BSD), check whether the
+       current year >= 2024 as a lightweight proxy.
+    3. Retry every _NTP_POLL_INTERVAL seconds until timeout.
+    4. After timeout, emit a WARNING and allow the heartbeat through so a
+       single flaky NTP server does not block the whole fleet.
+    """
+
+    def __init__(self, timeout_s: int = _DEFAULT_NTP_TIMEOUT, skip: bool = False):
+        self._timeout = timeout_s
+        self._skip    = skip
+
+    def wait(self) -> bool:
+        """
+        Block until NTP is synchronised (or timeout).
+        Returns True if sync confirmed, False if timed out.
+        """
+        if self._skip:
+            log.info("[NTP] Gate disabled (--skip-ntp-gate) — proceeding immediately")
+            return True
+
+        log.info("[NTP] Temporal gate armed — waiting for clock sync (timeout=%ds)", self._timeout)
+        deadline = time.monotonic() + self._timeout
+
+        while time.monotonic() < deadline:
+            synced = self._is_synced()
+            if synced:
+                log.info("[NTP] System clock synchronised ✓  — temporal gate cleared")
+                return True
+            remaining = int(deadline - time.monotonic())
+            log.info("[NTP] Clock not yet synced — retrying in %ds  (%ds remaining)",
+                     _NTP_POLL_INTERVAL, remaining)
+            time.sleep(_NTP_POLL_INTERVAL)
+
+        log.warning(
+            "[NTP] Timed out after %ds — system clock may still be unsynchronised. "
+            "Proceeding with heartbeat anyway (MTTS epoch integrity not guaranteed).",
+            self._timeout,
+        )
+        return False
+
+    @staticmethod
+    def _is_synced() -> bool:
+        """Return True when the OS reports the clock is NTP-synced."""
+        # ── Strategy 1: systemd timedatectl show (most Linux distros) ──────
+        try:
+            result = subprocess.run(
+                ["timedatectl", "show", "--property=NTPSynchronized"],
+                capture_output=True, text=True, timeout=5,
+            )
+            # Output: "NTPSynchronized=yes\n"
+            if "NTPSynchronized=yes" in result.stdout:
+                return True
+            if "NTPSynchronized=no" in result.stdout:
+                return False
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # ── Strategy 2: timedatectl status (older systemd) ─────────────────
+        try:
+            result = subprocess.run(
+                ["timedatectl", "status"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if "System clock synchronized: yes" in result.stdout:
+                return True
+            if "System clock synchronized: no" in result.stdout:
+                return False
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # ── Strategy 3: macOS / BSD — check sntp / system year ────────────
+        try:
+            # On macOS, timedatectl is absent.  Use current year as proxy:
+            # if the year >= 2024 the clock was set (either RTC or NTP).
+            current_year = datetime.now(timezone.utc).year
+            if current_year >= 2024:
+                log.debug("[NTP] Non-systemd host, year=%d — treating as synced", current_year)
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -252,12 +358,15 @@ class NodeBridge:
         serial_reader: SerialReader,
         lock: IdentityLock,
         client: NitInClient,
+        ntp_gate: NtpGate,
     ):
-        self._serial  = serial_reader
-        self._lock    = lock
-        self._client  = client
+        self._serial   = serial_reader
+        self._lock     = lock
+        self._client   = client
+        self._ntp_gate = ntp_gate
         self._iid: str | None = None  # resolved instance_id
-        self._running = True
+        self._ntp_cleared: bool = False  # set True once gate passes
+        self._running  = True
 
     # ── bootstrap ─────────────────────────────────────────────────────────────
 
@@ -302,6 +411,13 @@ class NodeBridge:
     def _handle_genesis(self, msg: dict) -> None:
         iid = self._resolve_identity(msg)
         self._iid = iid
+
+        # ── NTP Temporal Gate ──────────────────────────────────────────────
+        # Must clear before the very first heartbeat POST.  This prevents a
+        # 1970-epoch timestamp from corrupting TWIN's Phase 40.0 zone timer
+        # and crashing the MTTS Slope Analyzer.
+        if not self._ntp_cleared:
+            self._ntp_cleared = self._ntp_gate.wait()
 
         # Emit first heartbeat so the fleet banner appears immediately
         caps = msg.get("capabilities", {})
@@ -448,6 +564,18 @@ def _parse_args() -> argparse.Namespace:
         default=_cfg("BRIDGE_LOCK_FILE", _DEFAULT_LOCK_FILE),
         help="IDENTITY_LOCKED file path (default: /opt/nit-in/IDENTITY_LOCKED)",
     )
+    p.add_argument(
+        "--ntp-timeout",
+        type=int,
+        default=int(_cfg("BRIDGE_NTP_TIMEOUT", str(_DEFAULT_NTP_TIMEOUT))),
+        help="Seconds to wait for NTP sync before first heartbeat (default: 120)",
+    )
+    p.add_argument(
+        "--skip-ntp-gate",
+        action="store_true",
+        default=(_cfg("BRIDGE_SKIP_NTP", "false").lower() == "true"),
+        help="Bypass NTP temporal gate (use for testing or macOS dev)",
+    )
     return p.parse_args()
 
 
@@ -460,10 +588,11 @@ def main() -> None:
         )
         sys.exit(1)
 
-    lock    = IdentityLock(args.lock_file)
-    client  = NitInClient(args.hub, args.secret)
-    reader  = SerialReader(args.port, args.baud)
-    bridge  = NodeBridge(reader, lock, client)
+    lock     = IdentityLock(args.lock_file)
+    client   = NitInClient(args.hub, args.secret)
+    reader   = SerialReader(args.port, args.baud)
+    ntp_gate = NtpGate(timeout_s=args.ntp_timeout, skip=args.skip_ntp_gate)
+    bridge   = NodeBridge(reader, lock, client, ntp_gate)
 
     # Graceful shutdown on SIGTERM / SIGINT
     def _shutdown(sig, _frame):  # noqa: ANN001
