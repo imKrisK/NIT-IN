@@ -71,6 +71,14 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_challenges_nit ON challenges(nit_id, created_at DESC);
 
+  -- Phase 33 persistence: fleet hardware heartbeat registry (survives hub restarts)
+  CREATE TABLE IF NOT EXISTS fleet_health (
+    instance_id TEXT    PRIMARY KEY,
+    data        TEXT    NOT NULL,
+    updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_fleet_updated ON fleet_health(updated_at DESC);
+
   -- Phase 28: ZK compliance proof commitments from Arduino Uno Q Linux core
   CREATE TABLE IF NOT EXISTS zk_commitments (
     id               TEXT    PRIMARY KEY,
@@ -104,6 +112,26 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_bindings_nit ON platform_bindings(nit_id);
 `);
+
+// Phase 33 migration — fleet_health table may not exist on pre-Phase-33 DBs.
+// CREATE TABLE IF NOT EXISTS in the schema block handles new DBs; this guard
+// ensures the index exists on existing deployments that ran before Phase 33.
+{
+  const fhCols = db.pragma('table_info(fleet_health)').map(c => c.name);
+  if (!fhCols.length) {
+    // table missing entirely (very old DB) — the CREATE TABLE above already ran,
+    // but if somehow it didn't, re-run just the table DDL
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS fleet_health (
+        instance_id TEXT    PRIMARY KEY,
+        data        TEXT    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE INDEX IF NOT EXISTS idx_fleet_updated ON fleet_health(updated_at DESC);
+    `);
+    console.log('[DB] Migrated: created fleet_health table (Phase 33 persistence)');
+  }
+}
 
 // Phase 28.1 migration — add vkey hash columns to existing zk_commitments rows.
 // ALTER TABLE IF NOT EXISTS COLUMN is unavailable pre-SQLite 3.37 — use pragma introspection.
@@ -148,6 +176,11 @@ const S = {
 
   insertBinding:       db.prepare('INSERT OR IGNORE INTO platform_bindings (nit_id, platform) VALUES (?, ?)'),
   loadBindings:        db.prepare('SELECT platform, bound_at FROM platform_bindings WHERE nit_id = ? ORDER BY bound_at ASC'),
+
+  // Phase 33: fleet health persistence
+  upsertHeartbeat:    db.prepare('INSERT OR REPLACE INTO fleet_health (instance_id, data, updated_at) VALUES (?, ?, unixepoch())'),
+  getAllHeartbeats:    db.prepare('SELECT data FROM fleet_health ORDER BY updated_at DESC'),
+  deleteHeartbeat:    db.prepare('DELETE FROM fleet_health WHERE instance_id = ?'),
 
   // Phase 28: ZK commitments
   insertZkCommit:  db.prepare(`
@@ -299,6 +332,17 @@ module.exports = {
       public_signals: JSON.parse(row.public_signals),
       created_at:     new Date(row.created_at * 1000).toISOString(),
     }));
+  },
+
+  // Phase 33: fleet health persistence
+  saveHeartbeat(record) {
+    S.upsertHeartbeat.run(record.instance_id, JSON.stringify(record));
+  },
+  loadAllHeartbeats() {
+    return S.getAllHeartbeats.all().map(r => JSON.parse(r.data));
+  },
+  deleteHeartbeat(instance_id) {
+    S.deleteHeartbeat.run(instance_id);
   },
 
   // Raw db instance for migrations / diagnostics

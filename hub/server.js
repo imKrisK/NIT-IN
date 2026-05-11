@@ -25,6 +25,11 @@ const PORT       = process.env.PORT || 3001;
 const SIMULATE   = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
 const HUB_SECRET = process.env.HUB_SECRET;
 
+// Phase 33: SQLite persistence for fleetHealth.
+// Set NIT_IN_HUB_PERSISTENCE=true to survive hub restarts without a cold-start storm.
+// Defaults to false so existing test/sim environments are unchanged.
+const FLEET_PERSIST = process.env.NIT_IN_HUB_PERSISTENCE === 'true';
+
 // ── In-memory rate limiter ────────────────────────────────────────
 // Buckets reset every RATE_WINDOW_MS. Keeps O(active nodes) memory.
 const RATE_WINDOW_MS  = 60_000; // 1 minute window
@@ -1091,6 +1096,9 @@ app.post('/api/fleet/heartbeat', requireAuth, (req, res) => {
 
   fleetHealth.set(instance_id, record);
 
+  // Phase 33: persist to SQLite when NIT_IN_HUB_PERSISTENCE=true
+  if (FLEET_PERSIST) db.saveHeartbeat(record);
+
   // Broadcast live update to operator dashboard
   broadcast('fleet:heartbeat', record);
 
@@ -1446,6 +1454,15 @@ server.listen(PORT, () => {
 
   // ── Hydrate from SQLite (must run before genesis registration) ──
   registry.hydrate();
+
+  // Phase 33: restore fleet health from SQLite — prevents cold-start storm on restart
+  if (FLEET_PERSIST) {
+    const saved = db.loadAllHeartbeats();
+    saved.forEach(r => fleetHealth.set(r.instance_id, r));
+    if (saved.length) {
+      console.log(`[Fleet] Restored ${saved.length} node(s) from SQLite (NIT_IN_HUB_PERSISTENCE=true)`);
+    }
+  }
 
   // Set userNodeCounter to highest existing USR node so minting never collides
   const userNodes = registry.getAllNodes()
