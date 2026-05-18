@@ -1,1 +1,1 @@
-web: node hub/server.js
+web: bash start.sh
