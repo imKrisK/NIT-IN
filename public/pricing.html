@@ -380,7 +380,7 @@
       <li class="dim"><span class="dash">–</span>Custom NIT-ID prefix</li>
       <li class="dim"><span class="dash">–</span>API access</li>
     </ul>
-    <button onclick="openWaitlist('hub', 'HUB', '$9/mo')" class="btn-cta btn-hub coming-soon">Notify Me at Launch →</button>
+    <button onclick="handleCheckout('hub', '$9/mo')" class="btn-cta btn-hub">Upgrade to HUB →</button>
   </div>
 
   <!-- SIGNAL — featured -->
@@ -403,7 +403,7 @@
       <li class="dim"><span class="dash">–</span>Dedicated instance</li>
       <li class="dim"><span class="dash">–</span>SLA</li>
     </ul>
-    <button onclick="openWaitlist('signal', 'SIGNAL', '$29/mo')" class="btn-cta btn-signal coming-soon">Notify Me at Launch →</button>
+    <button onclick="handleCheckout('signal', '$29/mo')" class="btn-cta btn-signal">Upgrade to SIGNAL →</button>
   </div>
 
   <!-- ENTERPRISE -->
@@ -425,7 +425,7 @@
       <li><span class="check">✓</span>Priority support (4h response)</li>
       <li><span class="check">✓</span>Bilateral API + webhook events</li>
     </ul>
-    <button onclick="openWaitlist('enterprise', 'ENTERPRISE', '$99/mo')" class="btn-cta btn-ent coming-soon">Notify Me at Launch →</button>
+    <button onclick="handleCheckout('enterprise', '$99/mo')" class="btn-cta btn-ent">Upgrade to ENTERPRISE →</button>
   </div>
 
 </div>
@@ -661,30 +661,29 @@
     setTimeout(() => el.classList.remove('show'), 4000);
   }
 
-  // ── Checkout (Stripe — activates once price IDs are set in Railway) ──
+  // ── Checkout (Stripe — server-first, falls back to waitlist if not yet configured) ──
   async function handleCheckout(plan, label) {
-    const priceIdMap = {
-      hub:        window.__STRIPE_PRICE_HUB__        || '',
-      signal:     window.__STRIPE_PRICE_SIGNAL__     || '',
-      enterprise: window.__STRIPE_PRICE_ENTERPRISE__ || '',
-    };
-    const priceId = priceIdMap[plan];
-    if (!priceId) {
-      openWaitlist(plan, plan.toUpperCase(), label);
-      return;
-    }
+    const btnSel = plan === 'enterprise' ? '.btn-ent' : `.btn-${plan}`;
+    const btn = document.querySelector(btnSel);
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
       const r = await fetch('/api/billing/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, priceId, label }),
+        body: JSON.stringify({ plan }),
       });
       const d = await r.json();
-      if (d.url) window.location.href = d.url;
-      else toast(d.error || 'Checkout unavailable', false);
+      if (d.url) { window.location.href = d.url; return; }
+      if (d.error === 'billing_not_configured') {
+        openWaitlist(plan, plan.toUpperCase(), label);
+      } else {
+        toast(d.error || 'Checkout unavailable', false);
+      }
     } catch {
       toast('Checkout unavailable — try again', false);
     }
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
 
   // ── Waitlist modal ─────────────────────────────────────────────
