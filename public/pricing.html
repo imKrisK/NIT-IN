@@ -335,6 +335,20 @@
   <span class="launch-badge">✦ PUBLIC LAUNCH MAY 19, 2026</span>
 </section>
 
+<!-- Terms acceptance (Stripe / FTC compliance) -->
+<div style="max-width: 720px; margin: 0 auto 24px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;">
+  <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.78); line-height: 1.55;">
+    <input type="checkbox" id="tos-accept" style="margin-top: 4px; width: 16px; height: 16px; accent-color: #f59e0b; flex-shrink: 0;" />
+    <span>
+      I agree to the
+      <a href="https://manifest.conversationmine.com/terms" target="_blank" rel="noopener" style="color: #fbbf24; text-decoration: underline;">Terms of Service</a>,
+      <a href="https://manifest.conversationmine.com/privacy" target="_blank" rel="noopener" style="color: #fbbf24; text-decoration: underline;">Privacy Policy</a>, and
+      <a href="https://manifest.conversationmine.com/refunds" target="_blank" rel="noopener" style="color: #fbbf24; text-decoration: underline;">Refund &amp; Cancellation Policy</a>.
+      This is a recurring monthly subscription. <strong>Cancel anytime</strong> from your dashboard or by emailing <a href="mailto:billing@conversationmine.com" style="color: #fbbf24; text-decoration: underline;">billing@conversationmine.com</a>. <strong>7-day money-back guarantee</strong> for new subscribers.
+    </span>
+  </label>
+</div>
+
 <!-- Plan cards -->
 <div class="plans">
 
@@ -663,6 +677,16 @@
 
   // ── Checkout (Stripe — server-first, falls back to waitlist if not yet configured) ──
   async function handleCheckout(plan, label) {
+    // Stripe / FTC compliance — terms must be accepted
+    const tos = document.getElementById('tos-accept');
+    if (!tos || !tos.checked) {
+      toast('Please review and accept the Terms, Privacy, and Refund Policy above before subscribing.', false);
+      if (tos) {
+        tos.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        tos.focus();
+      }
+      return;
+    }
     const btnSel = plan === 'enterprise' ? '.btn-ent' : `.btn-${plan}`;
     const btn = document.querySelector(btnSel);
     const origText = btn ? btn.textContent : '';
