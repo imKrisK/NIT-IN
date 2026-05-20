@@ -1003,10 +1003,11 @@ app.get('/messages', (_req, res) => res.sendFile(path.join(__dirname, '../public
 app.get('/pricing',  (_req, res) => res.sendFile(path.join(__dirname, '../public/pricing.html')));
 
 // ── Stripe billing checkout ──────────────────────────────────────
-// Wire STRIPE_SECRET_KEY, STRIPE_PRICE_HUB, STRIPE_PRICE_SIGNAL,
-// STRIPE_PRICE_ENTERPRISE as Railway env vars to activate.
+// Wire STRIPE_SECRET_KEY, STRIPE_PRICE_STARTER, STRIPE_PRICE_HUB,
+// STRIPE_PRICE_SIGNAL, STRIPE_PRICE_ENTERPRISE as Railway env vars to activate.
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_PRICE_MAP  = {
+  starter:    process.env.STRIPE_PRICE_STARTER,
   hub:        process.env.STRIPE_PRICE_HUB,
   signal:     process.env.STRIPE_PRICE_SIGNAL,
   enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
@@ -1040,7 +1041,7 @@ app.post('/api/billing/create-checkout', async (req, res) => {
 
 // ── Waitlist ──────────────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_PLANS = new Set(['hub', 'signal', 'enterprise']);
+const VALID_PLANS = new Set(['starter', 'hub', 'signal', 'enterprise']);
 
 app.post('/api/waitlist', (req, res) => {
   const { email, plan } = req.body || {};

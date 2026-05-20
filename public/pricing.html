@@ -374,6 +374,28 @@
     <a href="/onboard.html" class="btn-cta btn-free">Mint your NIT-ID →</a>
   </div>
 
+  <!-- STARTER — $5 coffee-money entry -->
+  <div class="plan-card">
+    <div class="plan-icon">☕</div>
+    <div class="plan-name">STARTER</div>
+    <div class="plan-tagline">Coffee-money tier. Real identity, real edges, no commitment.</div>
+    <div class="plan-price">
+      <span class="price-amount">$5</span>
+      <span class="price-period">/mo</span>
+    </div>
+    <ul class="features">
+      <li><span class="check">✓</span>Everything in NODE</li>
+      <li><span class="check">✓</span>500 resonance edges</li>
+      <li><span class="check">✓</span>30 signals/min</li>
+      <li><span class="check">✓</span>30 DMs/min</li>
+      <li><span class="check">✓</span>Public hub access (read + write)</li>
+      <li><span class="check">✓</span>Cancel anytime · 7-day refund</li>
+      <li class="dim"><span class="dash">–</span>Hub federation</li>
+      <li class="dim"><span class="dash">–</span>API access</li>
+    </ul>
+    <button onclick="handleCheckout('starter', '$5/mo')" class="btn-cta btn-hub">Start for $5 →</button>
+  </div>
+
   <!-- HUB -->
   <div class="plan-card">
     <div class="plan-icon">🔗</div>
@@ -439,7 +461,7 @@
       <li><span class="check">✓</span>Priority support (4h response)</li>
       <li><span class="check">✓</span>Bilateral API + webhook events</li>
     </ul>
-    <button onclick="handleCheckout('enterprise', '$99/mo')" class="btn-cta btn-ent">Upgrade to ENTERPRISE →</button>
+    <button class="btn-cta btn-ent" disabled style="opacity:.55;cursor:not-allowed" title="Unlocks at 30 paying members">🔒 Unlocks at 30 paying members</button>
   </div>
 
 </div>
