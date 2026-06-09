@@ -66,11 +66,11 @@ setInterval(() => {
 
 // ── Auth middleware ───────────────────────────────────────────────
 if (!HUB_SECRET) {
-  console.warn('[AUTH] HUB_SECRET not set — write endpoints are unprotected');
+  console.error('[AUTH] HUB_SECRET environment variable is required');
+  process.exit(1);
 }
 
 function requireAuth(req, res, next) {
-  if (!HUB_SECRET) return next();
   const header = req.headers['authorization'] || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
   if (token !== HUB_SECRET) return res.status(401).json({ error: 'unauthorized' });
@@ -628,7 +628,7 @@ function verifyXPToken(nit_id, token) {
     const [tokenNitId, , expiry] = parts;
     if (tokenNitId !== nit_id) return false;
     if (parseInt(expiry, 10) < Math.floor(Date.now() / 1000)) return false;
-    const secret   = HUB_SECRET || 'nit-in-birth-rights-v1';
+    const secret   = HUB_SECRET;
     const expected = createHmac('sha256', secret).update(payload).digest('hex');
     // Constant-time comparison
     if (expected.length !== sig.length) return false;
@@ -696,7 +696,7 @@ app.post('/api/verify', (req, res) => {
   const expiry      = ts + 3600; // 1 hour
   const fingerprint = node.nit_fingerprint || node.hw_sig;
   const payload     = _xpPayload(nit_id, fingerprint, expiry);
-  const secret      = HUB_SECRET || 'nit-in-birth-rights-v1';
+  const secret      = HUB_SECRET;
   const hmac        = createHmac('sha256', secret).update(payload).digest('hex');
   const xpToken     = `${Buffer.from(payload).toString('base64')}.${hmac}`;
 
