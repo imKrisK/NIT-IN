@@ -810,6 +810,112 @@ app.get('/api/identity/:nit_id', (req, res) => {
   });
 });
 
+// ── Node ownership claim ──────────────────────────────────────────────────────
+//
+// POST /api/nit/claim
+// Links a physical hardware node (identified by nit_fingerprint) to a user
+// account (identified by email). This is the bridge between the Birth Rights
+// hardware identity layer and the billing/plan system.
+//
+// Auth flow:
+//   1. User completes Stripe checkout → webhook creates users row (email, plan)
+//   2. User powers on their Arduino/SBC → node mints nit_fingerprint via SRAM entropy
+//   3. User visits /pricing → clicks "Claim your node" → POST /api/nit/claim
+//   4. Hub verifies claim_token = HMAC-SHA256(HUB_SECRET, nit_fingerprint:email)
+//   5. On success: sets owner_email on the node JSON + updates registry
+//
+// Security: claim_token proves the caller knows both the node fingerprint AND
+// the platform secret — prevents one user from claiming another user's node.
+// Without a signed token, only the hub itself (or the hardware device via
+// X-Hub-Secret) can initiate a claim.
+
+app.post('/api/nit/claim', requireAuth, (req, res) => {
+  const { nit_fingerprint, email, claim_token } = req.body || {};
+  if (!nit_fingerprint || !email) {
+    return res.status(400).json({ error: 'nit_fingerprint and email required' });
+  }
+
+  // Validate email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'invalid email format' });
+  }
+
+  // Verify claim token — HMAC-SHA256(HUB_SECRET, "nit_fingerprint:email")
+  const { createHmac: _claimHmac } = require('crypto');
+  const expectedToken = _claimHmac('sha256', HUB_SECRET)
+    .update(`${nit_fingerprint}:${email}`)
+    .digest('hex');
+  if (!claim_token || claim_token !== expectedToken) {
+    return res.status(401).json({ error: 'invalid_claim_token', hint: 'Generate via POST /api/nit/claim-token' });
+  }
+
+  // Find the node in the registry
+  const node = registry.getNodeByFingerprint
+    ? registry.getNodeByFingerprint(nit_fingerprint)
+    : registry.getAllNodes().find(n => n.nit_fingerprint === nit_fingerprint);
+
+  if (!node) {
+    return res.status(404).json({ error: 'node_not_found', nit_fingerprint });
+  }
+
+  // Check if already claimed by a different email
+  if (node.owner_email && node.owner_email !== email) {
+    return res.status(409).json({ error: 'already_claimed', owner: node.owner_email.split('@')[0] + '@…' });
+  }
+
+  // Plan limit check — does this user have capacity?
+  const plan = getUserPlan(email);
+  const limit = PLAN_NODE_LIMITS[plan] ?? 1;
+  const current = getNodeCount(email);
+  if (limit !== Infinity && current >= limit) {
+    return res.status(403).json({
+      error: 'node_limit_reached',
+      plan,
+      limit,
+      message: `Your ${plan} plan allows ${limit} NIT node(s). Upgrade at /pricing.`,
+    });
+  }
+
+  // Set owner_email on the node and persist
+  node.owner_email = email;
+  if (registry.updateNode) {
+    registry.updateNode(node.nit_id, { owner_email: email });
+  } else {
+    db.prepare(`UPDATE nodes SET data = json_set(data, '$.owner_email', ?) WHERE id = ?`)
+      .run(email, node.nit_id);
+  }
+
+  console.log(`[claim] ${nit_fingerprint} → ${email} (plan: ${plan})`);
+  broadcast('node:claimed', { nit_id: node.nit_id, nit_fingerprint, plan });
+
+  res.json({
+    ok: true,
+    nit_id:          node.nit_id,
+    nit_fingerprint,
+    owner_email:     email,
+    plan,
+    nodes_used:      current + 1,
+    nodes_limit:     limit === Infinity ? 'unlimited' : limit,
+    patent_ref:      'USPTO-19/668,817',
+  });
+});
+
+// ── Claim token generator (server-side, for UI convenience) ──────────────────
+// POST /api/nit/claim-token — returns the HMAC token for a given fingerprint+email.
+// Protected by requireAuth so only authenticated hub operators can generate one.
+// In production the device itself would generate this on-board.
+app.post('/api/nit/claim-token', requireAuth, (req, res) => {
+  const { nit_fingerprint, email } = req.body || {};
+  if (!nit_fingerprint || !email) {
+    return res.status(400).json({ error: 'nit_fingerprint and email required' });
+  }
+  const { createHmac: _ctHmac } = require('crypto');
+  const token = _ctHmac('sha256', HUB_SECRET)
+    .update(`${nit_fingerprint}:${email}`)
+    .digest('hex');
+  res.json({ claim_token: token, expires: 'single-use recommended — rotate after claim' });
+});
+
 // ── Human signal transmission ─────────────────────────────────────
 app.post('/api/signal', requireAuth, requireResonance, async (req, res) => {
   const { node_id, msg, cross_platform_token } = req.body || {};
