@@ -10,8 +10,10 @@ const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-// Prefer Railway Volume mount (/app/data) when present; fall back to local ./data
-const DATA_DIR = fs.existsSync('/app/data') ? '/app/data' : path.join(__dirname, '../data');
+// Prefer DATA_DIR env var → Railway Volume mount (/app/data) → local ./data
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  || process.env.DATA_DIR
+  || (fs.existsSync('/app/data') ? '/app/data' : path.join(__dirname, '../data'));
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'nit.db'));
