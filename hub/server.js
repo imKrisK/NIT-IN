@@ -25,6 +25,20 @@ const PORT       = process.env.PORT || 3001;
 const SIMULATE   = process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
 const HUB_SECRET = process.env.HUB_SECRET;
 
+// ── Plan limits ───────────────────────────────────────────────────
+const PLAN_NODE_LIMITS = { free: 1, starter: 1, hub: 5, signal: 20, enterprise: Infinity };
+
+function getUserPlan(email) {
+  if (!email) return 'free';
+  const row = db.prepare('SELECT plan FROM users WHERE email = ?').get(email);
+  return row?.plan || 'free';
+}
+
+function getNodeCount(owner_email) {
+  const row = db.prepare('SELECT COUNT(*) AS cnt FROM nodes WHERE data LIKE ?').get(`%"owner_email":"${owner_email}"%`);
+  return row?.cnt ?? 0;
+}
+
 // Phase 33: SQLite persistence for fleetHealth.
 // Set NIT_IN_HUB_PERSISTENCE=true to survive hub restarts without a cold-start storm.
 // Defaults to false so existing test/sim environments are unchanged.
@@ -558,6 +572,21 @@ app.post('/api/mint', requireAuth, (req, res) => {
   }
   const name = raw.trim().slice(0, 64);
   if (!name) return res.status(400).json({ error: 'name must not be empty' });
+
+  // Plan-based node limit enforcement
+  const owner_email = req.body?.owner_email || null;
+  if (owner_email) {
+    const plan = getUserPlan(owner_email);
+    const limit = PLAN_NODE_LIMITS[plan] ?? 1;
+    if (limit !== Infinity && getNodeCount(owner_email) >= limit) {
+      return res.status(403).json({
+        error: 'node_limit_reached',
+        plan,
+        limit,
+        message: `Your ${plan} plan allows ${limit} NIT node(s). Upgrade at /pricing to add more.`,
+      });
+    }
+  }
 
   userNodeCounter++;
   const node_id = `NIT-USR-${String(userNodeCounter).padStart(4, '0')}`;

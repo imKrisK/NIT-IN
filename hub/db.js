@@ -126,6 +126,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_customer ON users(stripe_customer_id);
 `);
 
+// Migration: add owner_email to nodes table (pre-existing DBs won't have it)
+try {
+  db.prepare(`ALTER TABLE nodes ADD COLUMN owner_email TEXT`).run();
+} catch { /* column already exists — safe to ignore */ }
+
 // Phase 33 migration — fleet_health table may not exist on pre-Phase-33 DBs.
 // CREATE TABLE IF NOT EXISTS in the schema block handles new DBs; this guard
 // ensures the index exists on existing deployments that ran before Phase 33.
