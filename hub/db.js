@@ -111,6 +111,17 @@ db.exec(`
     UNIQUE(nit_id, platform)
   );
   CREATE INDEX IF NOT EXISTS idx_bindings_nit ON platform_bindings(nit_id);
+
+  CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT    NOT NULL UNIQUE,
+    plan       TEXT    NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    plan_updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  CREATE INDEX IF NOT EXISTS idx_users_customer ON users(stripe_customer_id);
 `);
 
 // Phase 33 migration — fleet_health table may not exist on pre-Phase-33 DBs.

@@ -1014,11 +1014,13 @@ const STRIPE_PRICE_MAP  = {
 };
 const PUBLIC_URL = process.env.PUBLIC_URL || 'https://nit-in.conversationmine.ai';
 
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+
 app.post('/api/billing/create-checkout', async (req, res) => {
   if (!STRIPE_SECRET_KEY) {
     return res.status(503).json({ error: 'billing_not_configured' });
   }
-  const { plan } = req.body || {};
+  const { plan, email } = req.body || {};
   const priceId = STRIPE_PRICE_MAP[plan];
   if (!priceId) return res.status(400).json({ error: 'invalid_plan' });
 
@@ -1029,6 +1031,8 @@ app.post('/api/billing/create-checkout', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(email ? { customer_email: email } : {}),
+      metadata: { plan },
       success_url: `${PUBLIC_URL}/pricing?checkout=success`,
       cancel_url:  `${PUBLIC_URL}/pricing`,
     });
@@ -1038,6 +1042,61 @@ app.post('/api/billing/create-checkout', async (req, res) => {
     res.status(500).json({ error: 'checkout_failed' });
   }
 });
+
+// ── Stripe webhook ────────────────────────────────────────────────
+const PLAN_LABEL_MAP = { starter: 'starter', hub: 'hub', signal: 'signal', enterprise: 'enterprise' };
+
+app.post('/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    if (!STRIPE_WEBHOOK_SECRET) {
+      console.error('[billing/webhook] STRIPE_WEBHOOK_SECRET not set — rejecting');
+      return res.status(503).json({ error: 'webhook_not_configured' });
+    }
+    const sig = req.headers['stripe-signature'];
+    let event;
+    try {
+      const Stripe = require('stripe');
+      event = Stripe(STRIPE_SECRET_KEY).webhooks.constructEvent(
+        req.body, sig, STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error('[billing/webhook] signature error:', err.message);
+      return res.status(400).json({ error: `Webhook error: ${err.message}` });
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const email = session.customer_email || session.customer_details?.email;
+      const plan  = session.metadata?.plan || 'starter';
+      const customerId = session.customer;
+      const subId = session.subscription;
+      if (email) {
+        db.prepare(`
+          INSERT INTO users (email, plan, stripe_customer_id, stripe_subscription_id, plan_updated_at)
+          VALUES (?, ?, ?, ?, unixepoch())
+          ON CONFLICT(email) DO UPDATE SET
+            plan = excluded.plan,
+            stripe_customer_id = excluded.stripe_customer_id,
+            stripe_subscription_id = excluded.stripe_subscription_id,
+            plan_updated_at = unixepoch()
+        `).run(email, plan, customerId, subId);
+        console.log(`[billing/webhook] plan=${plan} activated for ${email}`);
+      }
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      db.prepare(`
+        UPDATE users SET plan = 'free', stripe_subscription_id = NULL, plan_updated_at = unixepoch()
+        WHERE stripe_subscription_id = ?
+      `).run(sub.id);
+      console.log(`[billing/webhook] subscription cancelled, downgraded to free: sub=${sub.id}`);
+    }
+
+    res.json({ received: true });
+  }
+);
 
 // ── Waitlist ──────────────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
