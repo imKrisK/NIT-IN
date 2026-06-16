@@ -1637,6 +1637,95 @@ setBroadcast(broadcast);
   // Start peer discovery
   federation.init({ registry, broadcast, port: PORT, name: 'NIT-IN Hub' });
 
+setBroadcast(broadcast);
+
+  // Start peer discovery
+  federation.init({ registry, broadcast, port: PORT, name: 'NIT-IN Hub' });
+
+// ── BBB Compliance + Resend + Stripe Webhook (June 16 2026) ──────────────────
+
+const _nitProcessedEvents = new Set();
+
+app.get('/terms',           (req, res) => res.sendFile('terms.html',   { root: path.join(__dirname, 'public') }));
+app.get('/terms-of-service',(req, res) => res.sendFile('terms.html',   { root: path.join(__dirname, 'public') }));
+app.get('/privacy',         (req, res) => res.sendFile('privacy.html', { root: path.join(__dirname, 'public') }));
+app.get('/privacy-policy',  (req, res) => res.sendFile('privacy.html', { root: path.join(__dirname, 'public') }));
+app.get('/refund',          (req, res) => res.sendFile('refund.html',  { root: path.join(__dirname, 'public') }));
+app.get('/contact',         (req, res) => res.sendFile('contact.html', { root: path.join(__dirname, 'public') }));
+app.get('/support',         (req, res) => res.sendFile('support.html', { root: path.join(__dirname, 'public') }));
+
+app.get('/unsubscribe', async (req, res) => {
+  const email = (req.query.email || '').trim().toLowerCase();
+  const key = process.env.RESEND_API_KEY || '';
+  const aid = process.env.RESEND_AUDIENCE_ID || '';
+  if (email && email.includes('@') && key && aid) {
+    try {
+      await fetch(`https://api.resend.com/audiences/${aid}/contacts`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, unsubscribed: true }),
+      });
+    } catch {}
+  }
+  res.send('<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:auto;padding:40px"><h1>Unsubscribed</h1><p>Removed from NIT-IN marketing emails.</p><p><a href="/">← Home</a></p></body></html>');
+});
+
+app.get('/billing-portal', async (req, res) => {
+  const Stripe = require('stripe');
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY || '');
+  const customerId = req.query.customer_id || '';
+  if (!customerId) return res.redirect('/');
+  try {
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${req.protocol}://${req.get('host')}`,
+    });
+    return res.redirect(portal.url);
+  } catch (err) {
+    console.error('[nit-in billing portal]', err.message);
+    return res.redirect('/');
+  }
+});
+
+app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const Stripe = require('stripe');
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY || '');
+  const sig    = req.headers['stripe-signature'];
+  const secret = process.env.STRIPE_WEBHOOK_SECRET || '';
+  if (!secret) return res.status(500).json({ error: 'Webhook not configured' });
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, secret);
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+  // Idempotency
+  if (event.id) {
+    if (_nitProcessedEvents.has(event.id)) return res.json({ received: true, skipped: 'duplicate' });
+    if (_nitProcessedEvents.size > 5000) _nitProcessedEvents.clear();
+    _nitProcessedEvents.add(event.id);
+  }
+  if (event.type === 'checkout.session.completed') {
+    const email = event.data.object.customer_email || event.data.object.metadata?.email || '';
+    if (email) {
+      const key = process.env.RESEND_API_KEY || '';
+      const aid = process.env.RESEND_AUDIENCE_ID || '';
+      if (key && aid) {
+        try {
+          await fetch(`https://api.resend.com/audiences/${aid}/contacts`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, unsubscribed: false }),
+          });
+        } catch {}
+      }
+    }
+  }
+  return res.json({ received: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 server.listen(PORT, () => {
   const line = '═'.repeat(44);
   console.log(`\n╔${line}╗`);
