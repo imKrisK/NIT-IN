@@ -186,6 +186,27 @@ app.set('trust proxy', 1);
 app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
 
+// ── CF-aware IP helper ─────────────────────────────────────────────────────────────
+function _clientIp(req) {
+  return req.headers['cf-connecting-ip'] ||
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+    req.ip || 'unknown';
+}
+
+// ── In-memory sliding-window rate limiter ─────────────────────────────────────────
+const _rlStore = new Map();
+function _rateLimit(key, maxCalls, windowMs) {
+  const now = Date.now();
+  const calls = (_rlStore.get(key) || []).filter(t => now - t < windowMs);
+  if (calls.length >= maxCalls) { _rlStore.set(key, calls); return false; }
+  calls.push(now);
+  _rlStore.set(key, calls);
+  return true;
+}
+
+// ── Webhook idempotency set (bounded) ───────────────────────────────────────────────
+const _PROCESSED_WEBHOOK_EVENTS = new Set();
+
 app.get('/api/nodes',  (_req, res) => res.json(registry.getAllNodes()));
 app.get('/api/feed',   (req,  res) => res.json(registry.getFeed(Number(req.query.limit) || 50)));
 app.get('/api/graph',  (_req, res) => res.json(registry.getGraphData()));
@@ -1152,6 +1173,10 @@ const PUBLIC_URL = process.env.PUBLIC_URL || 'https://nit-in.conversationmine.ai
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 app.post('/api/billing/create-checkout', async (req, res) => {
+  const ip = _clientIp(req);
+  if (!_rateLimit(`checkout:${ip}`, 4, 60000)) {
+    return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
+  }
   if (!STRIPE_SECRET_KEY) {
     return res.status(503).json({ error: 'billing_not_configured' });
   }
@@ -1201,6 +1226,16 @@ app.post('/api/billing/webhook',
     }
 
     if (event.type === 'checkout.session.completed') {
+      // Idempotency guard — ignore duplicate deliveries
+      const eventId = event.id || '';
+      if (eventId && _PROCESSED_WEBHOOK_EVENTS.has(eventId)) {
+        console.log('[billing/webhook] duplicate event ignored:', eventId);
+        return res.json({ received: true });
+      }
+      if (eventId) {
+        _PROCESSED_WEBHOOK_EVENTS.add(eventId);
+        if (_PROCESSED_WEBHOOK_EVENTS.size > 10000) _PROCESSED_WEBHOOK_EVENTS.clear();
+      }
       const session = event.data.object;
       const email = session.customer_email || session.customer_details?.email;
       const plan  = session.metadata?.plan || 'starter';
@@ -1238,6 +1273,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_PLANS = new Set(['starter', 'hub', 'signal', 'enterprise']);
 
 app.post('/api/waitlist', (req, res) => {
+  const ip = _clientIp(req);
+  if (!_rateLimit(`waitlist:${ip}`, 5, 60000)) {
+    return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
+  }
   const { email, plan } = req.body || {};
   if (!email || !EMAIL_RE.test(email))         return res.status(400).json({ error: 'invalid_email' });
   if (!plan  || !VALID_PLANS.has(plan))        return res.status(400).json({ error: 'invalid_plan' });
@@ -1248,6 +1287,38 @@ app.post('/api/waitlist', (req, res) => {
 // Admin: view waitlist (protected — same ADMIN_KEY as other admin routes)
 app.get('/api/waitlist', requireAuth, (_req, res) => {
   res.json(db.loadWaitlist());
+});
+
+// ── Contact form ──────────────────────────────────────────────────────────────────
+app.post('/api/contact', async (req, res) => {
+  const ip = _clientIp(req);
+  if (!_rateLimit(`contact:${ip}`, 3, 60000)) {
+    return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
+  }
+  const { name, email, subject, message } = req.body || {};
+  const n = String(name || '').trim().slice(0, 100);
+  const e = String(email || '').trim().slice(0, 200);
+  const s = String(subject || 'Contact form').trim().slice(0, 100);
+  const m = String(message || '').trim().slice(0, 2000);
+  if (!n || !e || !m) return res.status(400).json({ error: 'name, email, and message are required' });
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    const adminEmail = process.env.ADMIN_EMAIL || 'support@conversationmine.com';
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'NIT-IN Contact <noreply@conversationmine.com>',
+        to: [adminEmail],
+        reply_to: e,
+        subject: `[NIT-IN Contact] ${s}`,
+        text: `From: ${n} <${e}>\n\n${m}`,
+      }),
+    }).catch(err => console.error('[contact] Resend error:', err.message));
+  } else {
+    console.log(`[contact] (no RESEND_API_KEY) ${n} <${e}>: ${s}`);
+  }
+  res.json({ success: true });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
