@@ -121,6 +121,14 @@ export class ExhaustionForecaster {
   }
 
   /**
+   * Burn rate statistics for the given history.
+   * Exposed so ACILPipeline can surface burnStats() without coupling to BurnRateCalculator directly.
+   */
+  burnStats(history: DailyBurnRecord[]) {
+    return this._burnCalc.compute(history);
+  }
+
+  /**
    * Retroactive validation: run the forecaster as if it were a past date.
    * Used to validate against the June 2026 CSV data.
    */

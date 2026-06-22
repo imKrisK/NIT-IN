@@ -44,6 +44,7 @@ let telemetry:       TelemetryCollector | undefined;
 let notifications:   NotificationManager | undefined;
 let secrets:         SecretManager | undefined;
 let _extensionUri:   vscode.Uri | undefined;
+let _auditFilePath:  string | undefined;
 let cctSavedTodal  = 0;
 let _syncTimer:      ReturnType<typeof setInterval> | undefined;
 
@@ -55,6 +56,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Initialize pipeline with user's budget config
   const period = buildBudgetPeriod(config);
+  pipeline      = new ACILPipeline(period, config.get<number>('overageCostPerUnit', 0.04));
+
+  // Load persisted audit trail from previous VS Code session
+  const auditPath = getAuditFilePath(context);
+  try { pipeline.audit.load(auditPath); } catch { /* ignore on first run */ }
   pipeline      = new ACILPipeline(period, config.get<number>('overageCostPerUnit', 0.04));
   statusBar     = new StatusBarManager();
   telemetry     = new TelemetryCollector();
@@ -120,6 +126,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   if (_syncTimer) clearInterval(_syncTimer);
+  // Persist audit trail so history survives VS Code restart
+  if (pipeline && _auditFilePath) {
+    try { pipeline.audit.save(_auditFilePath); } catch { /* best-effort */ }
+  }
   statusBar?.dispose();
   telemetry?.dispose();
 }
@@ -374,6 +384,12 @@ function buildBudgetPeriod(config: vscode.WorkspaceConfiguration): BudgetPeriod 
 
 function getUserId(config: vscode.WorkspaceConfiguration): string {
   return config.get<string>('userId', '') || 'developer';
+}
+
+function getAuditFilePath(context: vscode.ExtensionContext): string {
+  const p = vscode.Uri.joinPath(context.globalStorageUri, 'acil-audit.json').fsPath;
+  _auditFilePath = p;
+  return p;
 }
 
 function estimateCurrentContext(): number {

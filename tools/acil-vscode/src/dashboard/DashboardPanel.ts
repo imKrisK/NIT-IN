@@ -112,17 +112,10 @@ export class DashboardPanel implements vscode.Disposable {
     const summary   = p.audit.summarize();
     const dailyRaw  = p.audit.dailyBurns();
 
-    // Compute burn stats from daily records
-    const last7  = dailyRaw.slice(-7).map(d => d.grossCost);
-    const last14 = dailyRaw.slice(-14).map(d => d.grossCost);
-    const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    const dailyAvg  = avg(last7);
-    const window14Avg = avg(last14);
-    const trend = last7.length >= 3
-      ? (last7.slice(-3).reduce((a, b) => a + b, 0) / 3) > dailyAvg * 1.10 ? 'RISING'
-      : (last7.slice(-3).reduce((a, b) => a + b, 0) / 3) < dailyAvg * 0.90 ? 'FALLING'
-      : 'STABLE'
-      : 'STABLE';
+    // Use pipeline's exposed burnStats() — same BurnRateCalculator as ExhaustionForecaster
+    const stats     = p.burnStats();
+    const dailyAvg  = stats.dailyAvg;
+    const window14Avg = stats.window14;
 
     // Build last-30-days array (fill gaps with 0)
     const today     = new Date();
@@ -162,12 +155,12 @@ export class DashboardPanel implements vscode.Disposable {
 
     return {
       balance,
-      totalBudget:     p.enforcer.period.totalAllocation,
+      totalBudget:     p.totalAllocation,
       state:           p.currentState,
       forecast,
       summary,
       days,
-      burnStats: { dailyAvg, window14Avg, trend },
+      burnStats: { dailyAvg, window14Avg, trend: stats.trend },
       syncedFromGitHub: false,
       lastSyncTime:    null,
     };

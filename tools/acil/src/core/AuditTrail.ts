@@ -14,6 +14,8 @@
  */
 
 import { SessionEvent, SessionType, ModelId, EnforcementState } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface DailyBurnRecord {
   date:         string;             // YYYY-MM-DD
@@ -163,5 +165,54 @@ export class AuditTrail {
    */
   export(): SessionEvent[] {
     return [...this._events];
+  }
+
+  /**
+   * Persist audit trail to a JSON file.
+   * Called by VS Code extension on deactivate() and periodically.
+   * Safe to call multiple times — atomic write via temp file + rename.
+   *
+   * @param filePath Absolute path to the JSON file (e.g. in VS Code globalStorageUri)
+   */
+  save(filePath: string): void {
+    const payload = JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      events:  this._events,
+    }, null, 2);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmp = filePath + '.tmp';
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, filePath);
+  }
+
+  /**
+   * Load events from a previously saved JSON file.
+   * Merges loaded events with any already in memory (deduplicates by eventId).
+   * Silently no-ops if the file doesn't exist.
+   *
+   * @param filePath Absolute path to the JSON file
+   */
+  load(filePath: string): void {
+    if (!fs.existsSync(filePath)) return;
+    try {
+      const raw  = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(raw) as { version: number; events: SessionEvent[] };
+      if (!Array.isArray(data.events)) return;
+      const existingIds = new Set(this._events.map(e => e.eventId));
+      let loaded = 0;
+      for (const ev of data.events) {
+        if (!existingIds.has(ev.eventId)) {
+          // Rehydrate Date objects (JSON.parse returns strings)
+          ev.timestamp = new Date(ev.timestamp);
+          this._events.push(ev);
+          loaded++;
+        }
+      }
+      this._events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    } catch {
+      // Corrupted file — ignore, don't crash
+    }
   }
 }

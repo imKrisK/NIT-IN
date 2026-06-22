@@ -295,6 +295,15 @@ export class ACILPipeline {
   get enforcer(): BudgetEnforcer    { return this._enforcer; }
   get balance(): number             { return this._enforcer.balance; }
   get currentState(): EnforcementState { return this._enforcer.currentState; }
+  get totalAllocation(): number     { return this._enforcer.period.totalAllocation; }
+
+  /**
+   * Current burn statistics (daily avg, 7/14-day windows, trend).
+   * Used by dashboard + any consumer needing rate data without a full forecast.
+   */
+  burnStats() {
+    return this._forecaster.burnStats(this._audit.dailyBurns());
+  }
 
   /**
    * Current temporal forecast (on-demand refresh).
