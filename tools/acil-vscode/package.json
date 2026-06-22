@@ -119,7 +119,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.extension.json",
+    "build": "node scripts/bundle.js",
+    "build:types": "tsc -p tsconfig.extension.json --noEmit",
     "lint": "tsc -p tsconfig.extension.json --noEmit",
     "package": "vsce package --no-dependencies --allow-missing-repository --allow-package-secrets github"
   },
@@ -130,6 +131,7 @@
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
     "typescript": "^5.4.5"
   }
 }
