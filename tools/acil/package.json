@@ -1,0 +1,39 @@
+{
+  "name": "@nit-in/acil",
+  "version": "0.1.0",
+  "description": "AI Credit Intelligence Layer — Session classification, burn prediction, credit enforcement, and cost routing for LLM developer environments.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "tsc --noEmit"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ]
+  },
+  "keywords": [
+    "llm",
+    "ai-credits",
+    "token-metering",
+    "developer-tools",
+    "copilot"
+  ],
+  "author": "Kristoffer Kelly (imKrisK)",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.14.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@types/uuid": "^10.0.0",
+    "uuid": "^14.0.1"
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "name": "acil-vscode",
+  "displayName": "ACIL — AI Credit Intelligence Layer",
+  "description": "Pre-execution AI session classification, burn rate prediction, credit enforcement, and cross-model routing for VS Code.",
+  "version": "0.1.0",
+  "publisher": "imKrisK",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "copilot",
+    "token",
+    "budget",
+    "llm",
+    "credits"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "acil.showStatus",
+        "title": "ACIL: Show Credit Status"
+      },
+      {
+        "command": "acil.showForecast",
+        "title": "ACIL: Show Spend Forecast"
+      },
+      {
+        "command": "acil.showSessionHistory",
+        "title": "ACIL: Show Session History"
+      },
+      {
+        "command": "acil.setMonthlyBudget",
+        "title": "ACIL: Set Monthly Budget"
+      },
+      {
+        "command": "acil.connectGitHub",
+        "title": "ACIL: Connect GitHub Account (live credit sync)"
+      },
+      {
+        "command": "acil.syncNow",
+        "title": "ACIL: Sync Credit Balance Now"
+      },
+      {
+        "command": "acil.disconnectGitHub",
+        "title": "ACIL: Disconnect GitHub Account"
+      },
+      {
+        "command": "acil.showDashboard",
+        "title": "ACIL: Open Dashboard"
+      }
+    ],
+    "configuration": {
+      "title": "ACIL",
+      "properties": {
+        "acil.monthlyBudget": {
+          "type": "number",
+          "default": 39,
+          "description": "Monthly AI credit budget in USD (e.g. Copilot Pro+ = $39/mo)"
+        },
+        "acil.overageCostPerUnit": {
+          "type": "number",
+          "default": 0.04,
+          "description": "Cost per overage unit in USD (GitHub Copilot premium request = $0.04)"
+        },
+        "acil.preferredModel": {
+          "type": "string",
+          "default": "copilot-premium",
+          "description": "Default LLM model ID"
+        },
+        "acil.enableCCT": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Chat-to-Completion Translation (reduces token overhead)"
+        },
+        "acil.enableTSP": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Temporal Spend Predictor (shows exhaustion date forecast)"
+        },
+        "acil.userId": {
+          "type": "string",
+          "default": "",
+          "description": "Developer identifier for audit trail (defaults to Git user.email)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.extension.json",
+    "lint": "tsc -p tsconfig.extension.json --noEmit",
+    "package": "vsce package --no-dependencies --allow-missing-repository --allow-package-secrets github"
+  },
+  "dependencies": {
+    "@nit-in/acil": "file:../acil"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^5.4.5"
+  }
+}

@@ -8,3 +8,11 @@ data/*.db
 !.env.example
 !.env.template
 *.env
+.env.local
+*.env.local
+__pycache__/
+**/__pycache__/
+*.pyc
+*.vsix
+tools/acil/dist/
+tools/acil-vscode/dist/

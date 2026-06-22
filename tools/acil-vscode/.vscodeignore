@@ -1,0 +1,14 @@
+# Files/directories to exclude from the VSIX package
+# Keep the .vsix lean — only ship compiled dist/ and package.json
+
+.vscode/
+.gitignore
+*.map
+*.ts
+!dist/**
+src/
+__tests__/
+node_modules/
+.DS_Store
+*.vsix
+tsconfig*.json
