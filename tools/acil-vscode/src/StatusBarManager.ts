@@ -88,6 +88,12 @@ export class StatusBarManager implements vscode.Disposable {
     this._tspItem.hide();
   }
 
+  show(): void {
+    this._mainItem.show();
+    this._cctItem.show();
+    this._tspItem.show();
+  }
+
   dispose(): void {
     this._mainItem.dispose();
     this._cctItem.dispose();

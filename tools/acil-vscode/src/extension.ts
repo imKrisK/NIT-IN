@@ -39,103 +39,109 @@ import { ACILChatParticipant } from './lm/ChatParticipant';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
 
-let pipeline:        ACILPipeline | undefined;
-let statusBar:       StatusBarManager | undefined;
-let telemetry:       TelemetryCollector | undefined;
-let notifications:   NotificationManager | undefined;
-let secrets:         SecretManager | undefined;
-let _extensionUri:   vscode.Uri | undefined;
-let _auditFilePath:  string | undefined;
+let pipeline:         ACILPipeline | undefined;
+let statusBar:        StatusBarManager | undefined;
+let telemetry:        TelemetryCollector | undefined;
+let notifications:    NotificationManager | undefined;
+let secrets:          SecretManager | undefined;
+let _extensionUri:    vscode.Uri | undefined;
+let _auditFilePath:   string | undefined;
 let _chatParticipant: ACILChatParticipant | undefined;
-let cctSavedTodal  = 0;
-let _syncTimer:      ReturnType<typeof setInterval> | undefined;
+let _output:          vscode.OutputChannel | undefined;
+let cctSavedTodal   = 0;
+let _syncTimer:       ReturnType<typeof setInterval> | undefined;
 
 // ─── Activation ──────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
-  _extensionUri = context.extensionUri;
-  const config  = vscode.workspace.getConfiguration('acil');
+  // Output channel — visible under View → Output → ACIL
+  _output = vscode.window.createOutputChannel('ACIL');
+  context.subscriptions.push(_output);
+  _output.appendLine(`[ACIL] activate() — ${new Date().toISOString()}`);
 
-  // Initialize pipeline with user's budget config
-  const period = buildBudgetPeriod(config);
-  pipeline      = new ACILPipeline(period, config.get<number>('overageCostPerUnit', 0.04));
+  try {
+    _extensionUri = context.extensionUri;
+    const config  = vscode.workspace.getConfiguration('acil');
 
-  // Load persisted audit trail from previous VS Code session
-  const auditPath = getAuditFilePath(context);
-  try { pipeline.audit.load(auditPath); } catch { /* ignore on first run */ }
-  pipeline      = new ACILPipeline(period, config.get<number>('overageCostPerUnit', 0.04));
-  statusBar     = new StatusBarManager();
-  telemetry     = new TelemetryCollector();
-  notifications = new NotificationManager();
+    // ── Core components ────────────────────────────────────────────────────
+    const period  = buildBudgetPeriod(config);
+    pipeline      = new ACILPipeline(period, config.get<number>('overageCostPerUnit', 0.04));
+    statusBar     = new StatusBarManager();
+    telemetry     = new TelemetryCollector();
+    notifications = new NotificationManager();
+    secrets       = new SecretManager(context.secrets);
+    _output.appendLine('[ACIL] Core components initialized');
 
-  // Initialize SecretManager with VS Code's keychain-backed storage
-  secrets = new SecretManager(context.secrets);
+    // ── Load persisted audit trail ─────────────────────────────────────────
+    const auditPath = getAuditFilePath(context);
+    try {
+      pipeline.audit.load(auditPath);
+      _output.appendLine(`[ACIL] Audit loaded from: ${auditPath}`);
+    } catch (e) {
+      _output.appendLine(`[ACIL] Audit load skipped (first run): ${e}`);
+    }
 
-  // Initial status bar render
-  refreshStatusBar();
+    // ── Status bar + initial render ────────────────────────────────────────
+    refreshStatusBar();
+    statusBar.show?.();
 
-  // Sync GitHub credit balance on startup (non-blocking)
-  syncGitHubBalance();
+    // ── GitHub sync ────────────────────────────────────────────────────────
+    syncGitHubBalance();
+    _syncTimer = setInterval(() => syncGitHubBalance(), 30 * 60 * 1000);
+    context.subscriptions.push({ dispose: () => { if (_syncTimer) clearInterval(_syncTimer); } });
 
-  // Re-sync every 30 minutes while VS Code is open
-  _syncTimer = setInterval(() => syncGitHubBalance(), 30 * 60 * 1000);
-  context.subscriptions.push({ dispose: () => { if (_syncTimer) clearInterval(_syncTimer); } });
+    // ── Periodic refresh ───────────────────────────────────────────────────
+    const _refreshTimer = setInterval(() => refreshStatusBar(), 60 * 1000);
+    context.subscriptions.push({ dispose: () => clearInterval(_refreshTimer) });
 
-  // Periodic status bar refresh every 60 seconds (balance display stays current)
-  const _refreshTimer = setInterval(() => refreshStatusBar(), 60 * 1000);
-  context.subscriptions.push({ dispose: () => clearInterval(_refreshTimer) });
-
-  // ── Register Commands ──────────────────────────────────────────────────────
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('acil.showStatus', () => showStatusPanel()),
-    vscode.commands.registerCommand('acil.showForecast', () => showForecastPanel()),
-    vscode.commands.registerCommand('acil.showSessionHistory', () => showHistoryPanel()),
-    vscode.commands.registerCommand('acil.setMonthlyBudget', () => setMonthlyBudget()),
-    vscode.commands.registerCommand('acil.connectGitHub', () => connectGitHub()),
-    vscode.commands.registerCommand('acil.syncNow', () => syncGitHubBalance(true)),
-    vscode.commands.registerCommand('acil.disconnectGitHub', () => disconnectGitHub()),
-    vscode.commands.registerCommand('acil.showDashboard', () => {
-      if (pipeline && _extensionUri) DashboardPanel.show(_extensionUri, pipeline);
-    }),
-  );
-
-  // Register @acil chat participant (Phase 15 — Copilot intercept)
-  if (pipeline && telemetry && notifications) {
+    // ── Register @acil chat participant (unconditional) ──────────────────────
     _chatParticipant = new ACILChatParticipant(
       pipeline, telemetry, notifications, getUserId(config),
     );
     context.subscriptions.push(_chatParticipant);
+    _output.appendLine('[ACIL] Chat participant registered: acil.assistant');
+
+    // ── Register Commands ────────────────────────────────────────────────────
+    context.subscriptions.push(
+      vscode.commands.registerCommand('acil.showStatus', () => showStatusPanel()),
+      vscode.commands.registerCommand('acil.showForecast', () => showForecastPanel()),
+      vscode.commands.registerCommand('acil.showSessionHistory', () => showHistoryPanel()),
+      vscode.commands.registerCommand('acil.setMonthlyBudget', () => setMonthlyBudget()),
+      vscode.commands.registerCommand('acil.connectGitHub', () => connectGitHub()),
+      vscode.commands.registerCommand('acil.syncNow', () => syncGitHubBalance(true)),
+      vscode.commands.registerCommand('acil.disconnectGitHub', () => disconnectGitHub()),
+      vscode.commands.registerCommand('acil.showDashboard', () => {
+        if (pipeline && _extensionUri) DashboardPanel.show(_extensionUri, pipeline);
+      }),
+      vscode.commands.registerCommand('acil.runPreflight', async () => {
+        await runManualPreflight();
+      }),
+    );
+
+    // ── Config change listener ───────────────────────────────────────────────
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('acil')) {
+          const cfg = vscode.workspace.getConfiguration('acil');
+          pipeline = new ACILPipeline(buildBudgetPeriod(cfg), cfg.get<number>('overageCostPerUnit', 0.04));
+          cctSavedTodal = 0;
+          refreshStatusBar();
+        }
+      }),
+      vscode.workspace.onDidSaveTextDocument(() => refreshStatusBar()),
+    );
+
+    context.subscriptions.push(statusBar, telemetry);
+
+    _output.appendLine('[ACIL] Activation complete ✓');
+    vscode.window.showInformationMessage('ACIL activated — AI credit intelligence layer running.');
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    _output?.appendLine(`[ACIL] ACTIVATION ERROR: ${msg}`);
+    _output?.show(true);
+    vscode.window.showErrorMessage(`ACIL failed to activate: ${msg}`);
   }
-
-  // ── Manual pre-flight command (invoked before running an AI agent task) ───
-  context.subscriptions.push(
-    vscode.commands.registerCommand('acil.runPreflight', async () => {
-      await runManualPreflight();
-    })
-  );
-
-  // ── Config change listener ─────────────────────────────────────────────────
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('acil')) {
-        const cfg = vscode.workspace.getConfiguration('acil');
-        pipeline = new ACILPipeline(buildBudgetPeriod(cfg), cfg.get<number>('overageCostPerUnit', 0.04));
-        cctSavedTodal = 0;
-        refreshStatusBar();
-      }
-    })
-  );
-
-  // ── Telemetry listener: refresh status bar on document changes ─────────────
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(() => refreshStatusBar())
-  );
-
-  // Register disposables
-  context.subscriptions.push(statusBar, telemetry);
-
-  vscode.window.showInformationMessage('ACIL activated — AI credit intelligence layer running.');
 }
 
 export function deactivate(): void {
