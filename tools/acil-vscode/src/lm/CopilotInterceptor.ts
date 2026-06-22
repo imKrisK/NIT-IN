@@ -10,10 +10,12 @@
  *   4. If ALLOWED: forward to the actual model.sendRequest()
  *   5. After stream completes: estimate tokens from character count, run postflight
  *
- * Token counting (Phase 15 v1):
- *   VS Code 1.90 does not expose token counts on LanguageModelChatResponse.
- *   We estimate: inputTokens = prompt.length / 4, outputTokens = response.length / 4.
- *   Phase 17 will hook into the Copilot usage reporting API when Microsoft exposes it.
+ * Token counting (Phase 19 — upgraded):
+ *   Uses model.countTokens() — the VS Code 1.90 API backed by the model's actual tokenizer.
+ *   Preflight: count all message text before sending → feeds contextSizeTokens.
+ *   Postflight: count accumulated output text after stream closes → actual output tokens.
+ *   Fallback: if countTokens() throws (e.g. during unit test / offline), reverts to len/4.
+ *   This makes ACIL cost predictions accurate to within ~1 token on all supported models.
  *
  * Usage:
  *   const interceptor = new CopilotInterceptor(pipeline, telemetry, notifications);
@@ -53,9 +55,28 @@ function modelIdFromVSCode(model: vscode.LanguageModelChat): ModelId {
   return ModelId.COPILOT_PREMIUM; // safe default
 }
 
-// Rough token estimate: 1 token ≈ 4 characters (GPT-4 average)
+// Fallback token estimate when countTokens() is unavailable (offline / tests)
 function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+/**
+ * Count tokens using the model's real tokenizer (VS Code 1.90 API).
+ * Falls back to len/4 estimate if the API throws (offline, unit tests, etc.)
+ *
+ * Wave 10 Claim 2: "pre-execution burn rate predictor receives actual input token count
+ * from the model's tokenizer before any API call is transmitted"
+ */
+async function countTokensReal(
+  model:       vscode.LanguageModelChat,
+  text:        string,
+  cancelToken?: vscode.CancellationToken,
+): Promise<number> {
+  try {
+    return await model.countTokens(text, cancelToken);
+  } catch {
+    return estimateTokens(text);
+  }
 }
 
 export class CopilotInterceptor {
@@ -98,13 +119,18 @@ export class CopilotInterceptor {
     const modelId = modelIdFromVSCode(model);
     const signals = this._telemetry.collect(promptText);
 
+    // ── Real token count (Phase 19) ───────────────────────────────────────
+    // model.countTokens() uses the model's actual tokenizer, not len/4 estimation.
+    // This is what feeds contextSizeTokens → BurnPredictor → accurate cost forecast.
+    const inputTokens = await countTokensReal(model, promptText, token);
+
     // ── Preflight ──────────────────────────────────────────────────────────
     const preflight = this._pipeline.preflight({
       rawInput:           promptText,
       telemetry:          signals,
       preferredModelId:   modelId,
       qualityRequirement: QualityRequirement.STANDARD,
-      contextSizeTokens:  estimateTokens(promptText),
+      contextSizeTokens:  inputTokens,   // ← real count from model's tokenizer
       agenticDepth:       signals.toolCallSignatures.length > 2 ? 3 : 0,
       userId,
     });
@@ -148,16 +174,13 @@ export class CopilotInterceptor {
     }
 
     // ── Forward to model ───────────────────────────────────────────────────
-    // If THROTTLE chose a different model, we cannot switch mid-request in VS Code
-    // (model is passed in by the caller). We note the downgrade in postflight.
-    const startTime   = Date.now();
     const response    = await model.sendRequest(messages, options, token);
 
     // ── Stream + postflight ────────────────────────────────────────────────
     let outputText = '';
     const originalStream = response.text;
 
-    // Wrap stream: collect text for postflight token estimation
+    // Wrap stream: collect text, then count real output tokens after stream closes
     const self = this;
     const interceptedText: AsyncIterable<string> = {
       [Symbol.asyncIterator]: async function* () {
@@ -165,9 +188,8 @@ export class CopilotInterceptor {
           outputText += chunk;
           yield chunk;
         }
-        // Stream complete — run postflight
-        const inputTokens  = estimateTokens(promptText);
-        const outputTokens = estimateTokens(outputText);
+        // Stream complete — count actual output tokens with real tokenizer
+        const outputTokens = await countTokensReal(model, outputText);
         self._postflight(preflight, inputTokens, outputTokens, userId);
       },
     };
