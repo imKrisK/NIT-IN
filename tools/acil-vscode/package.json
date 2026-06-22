@@ -59,6 +59,29 @@
         "title": "ACIL: Open Dashboard"
       }
     ],
+    "chatParticipants": [
+      {
+        "id": "acil.assistant",
+        "name": "acil",
+        "fullName": "ACIL — AI Credit Intelligence Layer",
+        "description": "Pre-flight AI cost prediction, enforcement, and spend forecasting. Type /status, /forecast, or any prompt.",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "status",
+            "description": "Show current credit balance and enforcement state"
+          },
+          {
+            "name": "forecast",
+            "description": "Show temporal spend forecast and exhaustion date"
+          },
+          {
+            "name": "budget",
+            "description": "Set your monthly AI credit budget"
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "ACIL",
       "properties": {

@@ -35,6 +35,7 @@ import { NotificationManager } from './NotificationManager';
 import { SecretManager }       from './sync/SecretManager';
 import { GitHubCreditSync }    from './sync/GitHubCreditSync';
 import { DashboardPanel }      from './dashboard/DashboardPanel';
+import { ACILChatParticipant } from './lm/ChatParticipant';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ let notifications:   NotificationManager | undefined;
 let secrets:         SecretManager | undefined;
 let _extensionUri:   vscode.Uri | undefined;
 let _auditFilePath:  string | undefined;
+let _chatParticipant: ACILChatParticipant | undefined;
 let cctSavedTodal  = 0;
 let _syncTimer:      ReturnType<typeof setInterval> | undefined;
 
@@ -98,6 +100,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  // Register @acil chat participant (Phase 15 — Copilot intercept)
+  if (pipeline && telemetry && notifications) {
+    _chatParticipant = new ACILChatParticipant(
+      pipeline, telemetry, notifications, getUserId(config),
+    );
+    context.subscriptions.push(_chatParticipant);
+  }
+
   // ── Manual pre-flight command (invoked before running an AI agent task) ───
   context.subscriptions.push(
     vscode.commands.registerCommand('acil.runPreflight', async () => {
@@ -130,6 +140,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   if (_syncTimer) clearInterval(_syncTimer);
+  _chatParticipant?.dispose();
   // Persist audit trail so history survives VS Code restart
   if (pipeline && _auditFilePath) {
     try { pipeline.audit.save(_auditFilePath); } catch { /* best-effort */ }
