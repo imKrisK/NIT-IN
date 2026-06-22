@@ -79,6 +79,10 @@ export function activate(context: vscode.ExtensionContext): void {
   _syncTimer = setInterval(() => syncGitHubBalance(), 30 * 60 * 1000);
   context.subscriptions.push({ dispose: () => { if (_syncTimer) clearInterval(_syncTimer); } });
 
+  // Periodic status bar refresh every 60 seconds (balance display stays current)
+  const _refreshTimer = setInterval(() => refreshStatusBar(), 60 * 1000);
+  context.subscriptions.push({ dispose: () => clearInterval(_refreshTimer) });
+
   // ── Register Commands ──────────────────────────────────────────────────────
 
   context.subscriptions.push(
