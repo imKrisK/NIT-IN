@@ -289,9 +289,15 @@ function getDashboardHtml(data: DashboardData): string {
     .map(([t, n]) => `<tr><td>${t}</td><td>${n}</td></tr>`)
     .join('');
 
-  return /* html */ `<!DOCTYPE html>
-<html lang="en">
-<head>
+  const substitutionRows = data.summary.totalSubstitutions > 0
+    ? Object.entries(data.summary.substitutionBreakdown ?? {})
+        .map(([pair, s]) =>
+          '<tr><td>' + pair + '</td><td>' + s!.count + '</td><td>$' + s!.totalSavingsUsd.toFixed(4) + '</td></tr>')
+        .join('') +
+      '<tr style="font-weight:600"><td>Total</td><td>' + data.summary.totalSubstitutions + 'x</td><td>$' + (data.summary.totalSubstitutionSavingsUsd ?? 0).toFixed(4) + '</td></tr>'
+    : '<tr><td colspan="3" style="color:#555">No substitutions yet (requires THROTTLE state)</td></tr>';
+
+  return /* html */ `<!DOCTYPE html><head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -426,6 +432,13 @@ function getDashboardHtml(data: DashboardData): string {
       <tr><th>Type</th><th>Count</th></tr>
       ${sessionRows || '<tr><td colspan="2" style="color:#555">No sessions recorded</td></tr>'}
     </table>
+    <div style="margin-top:10px">
+      <h2>🔄 Model Substitutions (Claim 7)</h2>
+      <table>
+        <tr><th>Substitution</th><th>Count</th><th>Saved</th></tr>
+        ${substitutionRows}
+      </table>
+    </div>
     <div style="margin-top:10px">
       <h2>Totals</h2>
       <table>

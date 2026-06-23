@@ -104,7 +104,7 @@ export interface PipelinePostflightInput {
   sessionId:      string;
   userId:         string;
   sessionType:    SessionType;
-  modelId:        ModelId;
+  modelId:        ModelId;           // Actual model used (may differ from requested)
   agenticDepth:   number;
   inputTokens:    number;
   outputTokens:   number;
@@ -115,6 +115,9 @@ export interface PipelinePostflightInput {
   translatedTokens: number | null;
   cctSavingsPct:  number | null;
   classifierConfidence: number;
+  // Model substitution — Wave 10 Claim 7
+  wasDowngraded?:    boolean;         // true = effectiveModel != requestedModel
+  originalModelId?:  ModelId | null;  // What the developer originally asked for
 }
 
 export interface PipelinePostflightResult {
@@ -261,6 +264,15 @@ export class ACILPipeline {
       originalTokens: input.originalTokens,
       translatedTokens: input.translatedTokens,
       cctSavingsPct:  input.cctSavingsPct,
+      // Model substitution tracking — Wave 10 Claim 7
+      wasDowngraded:    input.wasDowngraded,
+      originalModelId:  input.originalModelId,
+      substitutionSavingsUsd: input.wasDowngraded && input.originalModelId
+        ? (() => {
+            const origBilling = this._billing.bill(meter.accumulated, input.originalModelId);
+            return Math.max(0, origBilling.grossCost - billing.grossCost);
+          })()
+        : null,
     };
     this._audit.append(event);
     this._audit.logEnforcementState(this._enforcer.currentState);

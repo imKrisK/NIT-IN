@@ -41,6 +41,10 @@ export interface AuditSummary {
   bySessionType: Partial<Record<SessionType, number>>;
   byModel:       Partial<Record<ModelId, number>>;
   enforcementStateHistory: Array<{ timestamp: Date; state: EnforcementState }>;
+  // Model substitution analytics — Wave 10 Claim 7
+  totalSubstitutions:          number;
+  totalSubstitutionSavingsUsd: number;
+  substitutionBreakdown:       Partial<Record<string, { count: number; totalSavingsUsd: number }>>;
 }
 
 export class AuditTrail {
@@ -126,6 +130,8 @@ export class AuditTrail {
 
     const byType:  Partial<Record<SessionType, number>> = {};
     const byModel: Partial<Record<ModelId, number>>     = {};
+    // Model substitution analytics — Wave 10 Claim 7
+    const substitutions: Array<{ from: ModelId; to: ModelId; savingsUsd: number }> = [];
     let tokens = 0, gross = 0, net = 0, discount = 0, cctSaved = 0;
 
     for (const e of relevant) {
@@ -138,6 +144,25 @@ export class AuditTrail {
       if (e.originalTokens != null && e.translatedTokens != null) {
         cctSaved += e.originalTokens - e.translatedTokens;
       }
+      if (e.wasDowngraded && e.originalModelId) {
+        substitutions.push({
+          from:       e.originalModelId,
+          to:         e.modelId,
+          savingsUsd: e.substitutionSavingsUsd ?? 0,
+        });
+      }
+    }
+
+    // Aggregate substitution stats
+    const totalSubstitutions  = substitutions.length;
+    const totalSubstitutionSavingsUsd = substitutions.reduce((s, x) => s + x.savingsUsd, 0);
+    // Group by from→to pair
+    const substitutionBreakdown: Partial<Record<string, { count: number; totalSavingsUsd: number }>> = {};
+    for (const s of substitutions) {
+      const key = `${s.from}→${s.to}`;
+      if (!substitutionBreakdown[key]) substitutionBreakdown[key] = { count: 0, totalSavingsUsd: 0 };
+      substitutionBreakdown[key]!.count++;
+      substitutionBreakdown[key]!.totalSavingsUsd += s.savingsUsd;
     }
 
     return {
@@ -153,6 +178,10 @@ export class AuditTrail {
       bySessionType: byType,
       byModel:       byModel,
       enforcementStateHistory: this._enforcementLog,
+      // Substitution analytics
+      totalSubstitutions,
+      totalSubstitutionSavingsUsd,
+      substitutionBreakdown,
     };
   }
 

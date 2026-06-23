@@ -108,6 +108,12 @@ export interface SessionEvent {
   originalTokens: number | null;    // Token count if sent in original chat format
   translatedTokens: number | null;  // Token count after CCT optimization
   cctSavingsPct:  number | null;    // % reduction (0.0–1.0)
+
+  // Model substitution (NOVEL — Wave 10 Claim 7)
+  // Set when THROTTLE state transparently swapped a premium model for a cheaper one
+  wasDowngraded?:           boolean;        // true = actual model ≠ requested model
+  originalModelId?:         ModelId | null; // The model the developer requested
+  substitutionSavingsUsd?:  number | null;  // Cost difference gross (original) - gross (substituted)
 }
 
 // ─── Enforcement State ────────────────────────────────────────────────────────

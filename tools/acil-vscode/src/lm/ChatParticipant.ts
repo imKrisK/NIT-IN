@@ -166,6 +166,13 @@ export class ACILChatParticipant implements vscode.Disposable {
       [EnforcementState.EXHAUSTED]: '⛔',
     };
 
+    const substitutionLines = summary.totalSubstitutions > 0
+      ? Object.entries(summary.substitutionBreakdown ?? {})
+          .map(([pair, data]) =>
+            `| → ${pair} | ${data!.count}x | $${data!.totalSavingsUsd.toFixed(4)} |`)
+          .join('\n')
+      : '| — | 0 | $0.0000 |';
+
     response.markdown([
       `## ${stateEmoji[state]} ACIL Credit Status`,
       '',
@@ -180,6 +187,12 @@ export class ACILChatParticipant implements vscode.Disposable {
       `| CCT saved | ${(summary.cctSavingsTokens ?? 0).toLocaleString()} tokens |`,
       `| Daily avg burn | $${stats.dailyAvg.toFixed(4)} |`,
       `| Trend | ${stats.trend} |`,
+      '',
+      `### 🔄 Model Substitutions (Claim 7)`,
+      `| Substitution | Count | Savings |`,
+      `|---|---|---|`,
+      substitutionLines,
+      `| **Total saved** | **${summary.totalSubstitutions}x** | **$${(summary.totalSubstitutionSavingsUsd ?? 0).toFixed(4)}** |`,
     ].join('\n'));
 
     return {};
