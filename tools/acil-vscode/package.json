@@ -57,6 +57,10 @@
       {
         "command": "acil.showDashboard",
         "title": "ACIL: Open Dashboard"
+      },
+      {
+        "command": "acil.exportCSV",
+        "title": "ACIL: Export Session History as CSV"
       }
     ],
     "chatParticipants": [

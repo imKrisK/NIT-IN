@@ -121,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('acil.showDashboard', () => {
         if (pipeline && _extensionUri) DashboardPanel.show(_extensionUri, pipeline);
       }),
+      vscode.commands.registerCommand('acil.exportCSV', () => exportCSV()),
       vscode.commands.registerCommand('acil.runPreflight', async () => {
         await runManualPreflight();
       }),
@@ -378,6 +379,39 @@ async function setMonthlyBudget(): Promise<void> {
   const config = vscode.workspace.getConfiguration('acil');
   await config.update('monthlyBudget', parseFloat(input), vscode.ConfigurationTarget.Global);
   vscode.window.showInformationMessage(`ACIL: Monthly budget set to $${input}`);
+}
+
+async function exportCSV(): Promise<void> {
+  if (!pipeline) return;
+  const summary = pipeline.audit.summarize();
+  if (summary.totalEvents === 0) {
+    vscode.window.showInformationMessage('ACIL: No sessions recorded yet — use @acil to start tracking.');
+    return;
+  }
+
+  const defaultPath = vscode.Uri.file(
+    require('os').homedir() + `/Downloads/acil-session-history-${new Date().toISOString().slice(0,10)}.csv`
+  );
+
+  const uri = await vscode.window.showSaveDialog({
+    defaultUri:  defaultPath,
+    filters:     { 'CSV Files': ['csv'], 'All Files': ['*'] },
+    title:       'Export ACIL Session History',
+    saveLabel:   'Export CSV',
+  });
+
+  if (!uri) return;
+
+  pipeline.audit.exportCSV(uri.fsPath);
+
+  const open = { title: 'Open in Finder' };
+  const action = await vscode.window.showInformationMessage(
+    `ACIL: Exported ${summary.totalEvents} sessions to ${uri.fsPath}`,
+    open,
+  );
+  if (action === open) {
+    vscode.env.openExternal(vscode.Uri.file(require('path').dirname(uri.fsPath)));
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

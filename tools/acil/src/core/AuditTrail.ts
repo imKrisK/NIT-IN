@@ -161,6 +161,71 @@ export class AuditTrail {
   }
 
   /**
+   * Export audit events as GitHub-compatible CSV.
+   *
+   * Column format matches GitHub Copilot Billing CSV exactly:
+   *   date, model, session_type, input_tokens, output_tokens, cached_tokens,
+   *   total_tokens, gross_cost_usd, discount_usd, net_cost_usd,
+   *   enforcement_state, cct_savings_tokens, predicted_cost_usd
+   *
+   * Use to diff ACIL tracking vs GitHub's own billing download.
+   * Optionally pass a filePath to write to disk (atomic write).
+   */
+  exportCSV(filePath?: string): string {
+    const header = [
+      'date',
+      'model',
+      'session_type',
+      'input_tokens',
+      'output_tokens',
+      'cached_tokens',
+      'total_tokens',
+      'gross_cost_usd',
+      'discount_usd',
+      'net_cost_usd',
+      'balance_after_usd',
+      'cct_savings_tokens',
+      'predicted_cost_usd',
+    ].join(',');
+
+    const rows = this._events.map(e => {
+      const date = e.timestamp instanceof Date
+        ? e.timestamp.toISOString().slice(0, 10)
+        : String(e.timestamp).slice(0, 10);
+      const cctSaved = e.originalTokens && e.translatedTokens
+        ? e.originalTokens - e.translatedTokens
+        : 0;
+      return [
+        date,
+        e.modelId,
+        e.sessionType,
+        e.usage.inputTokens,
+        e.usage.outputTokens,
+        e.usage.cachedTokens,
+        e.usage.totalTokens,
+        e.grossCost.toFixed(6),
+        e.discountAmount.toFixed(6),
+        e.netCost.toFixed(6),
+        e.balanceAfter.toFixed(6),
+        cctSaved,
+        e.predictedCost != null ? e.predictedCost.toFixed(6) : '',
+      ].join(',');
+    });
+
+    const csv = [header, ...rows].join('\n');
+
+    if (filePath) {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const tmp = filePath + '.tmp';
+      fs.writeFileSync(tmp, csv, 'utf8');
+      fs.renameSync(tmp, filePath);
+    }
+
+    return csv;
+  }
+
+  /**
    * Export events as JSON (for persistence or reporting).
    */
   export(): SessionEvent[] {
