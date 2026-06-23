@@ -10,6 +10,8 @@
  */
 
 import { SessionType } from '../core/types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface SessionBurnBaseline {
   minTokens:    number;
@@ -83,5 +85,49 @@ export class BurnProfile {
       out[k as SessionType] = (v as number[]).length;
     }
     return out;
+  }
+
+  /**
+   * Persist personal calibration data to disk.
+   * Atomic write (tmp → rename). Creates directory if needed.
+   * Wave 10 Claim 2: developer-specific burn profile survives restarts.
+   */
+  save(filePath: string): void {
+    const payload = JSON.stringify({
+      version:  1,
+      savedAt:  new Date().toISOString(),
+      observed: this._observed,
+    }, null, 2);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmp = filePath + '.tmp';
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, filePath);
+  }
+
+  /**
+   * Load personal calibration data from disk.
+   * Merges with any existing in-memory samples (no duplicates, just appends).
+   * Silent no-op if file doesn't exist (first run).
+   */
+  load(filePath: string): void {
+    if (!fs.existsSync(filePath)) return;
+    try {
+      const raw  = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(raw) as {
+        version: number;
+        observed: Record<string, number[]>;
+      };
+      if (!data.observed || typeof data.observed !== 'object') return;
+      for (const [key, samples] of Object.entries(data.observed)) {
+        if (!Array.isArray(samples)) continue;
+        const type = key as SessionType;
+        if (!this._observed[type]) this._observed[type] = [];
+        // Append (no dedup needed — all samples are valid historical data)
+        this._observed[type]!.push(...samples);
+      }
+    } catch {
+      // Corrupted file — ignore, don't crash
+    }
   }
 }

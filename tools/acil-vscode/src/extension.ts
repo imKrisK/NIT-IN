@@ -46,6 +46,7 @@ let notifications:    NotificationManager | undefined;
 let secrets:          SecretManager | undefined;
 let _extensionUri:    vscode.Uri | undefined;
 let _auditFilePath:   string | undefined;
+let _profileFilePath: string | undefined;
 let _chatParticipant: ACILChatParticipant | undefined;
 let _output:          vscode.OutputChannel | undefined;
 let cctSavedTodal   = 0;
@@ -72,13 +73,20 @@ export function activate(context: vscode.ExtensionContext): void {
     secrets       = new SecretManager(context.secrets);
     _output.appendLine('[ACIL] Core components initialized');
 
-    // ── Load persisted audit trail ─────────────────────────────────────────
-    const auditPath = getAuditFilePath(context);
+    // ── Load persisted audit trail + burn profile ──────────────────────────
+    const auditPath   = getAuditFilePath(context);
+    const profilePath = getProfileFilePath(context);
     try {
       pipeline.audit.load(auditPath);
       _output.appendLine(`[ACIL] Audit loaded from: ${auditPath}`);
     } catch (e) {
       _output.appendLine(`[ACIL] Audit load skipped (first run): ${e}`);
+    }
+    try {
+      pipeline.profile.load(profilePath);
+      _output.appendLine(`[ACIL] Burn profile loaded from: ${profilePath}`);
+    } catch (e) {
+      _output.appendLine(`[ACIL] Burn profile load skipped (first run): ${e}`);
     }
 
     // ── Status bar + initial render ────────────────────────────────────────
@@ -147,9 +155,12 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   if (_syncTimer) clearInterval(_syncTimer);
   _chatParticipant?.dispose();
-  // Persist audit trail so history survives VS Code restart
+  // Persist audit + burn profile so history survives VS Code restart
   if (pipeline && _auditFilePath) {
     try { pipeline.audit.save(_auditFilePath); } catch { /* best-effort */ }
+  }
+  if (pipeline && _profileFilePath) {
+    try { pipeline.profile.save(_profileFilePath); } catch { /* best-effort */ }
   }
   statusBar?.dispose();
   telemetry?.dispose();
@@ -410,6 +421,12 @@ function getUserId(config: vscode.WorkspaceConfiguration): string {
 function getAuditFilePath(context: vscode.ExtensionContext): string {
   const p = vscode.Uri.joinPath(context.globalStorageUri, 'acil-audit.json').fsPath;
   _auditFilePath = p;
+  return p;
+}
+
+function getProfileFilePath(context: vscode.ExtensionContext): string {
+  const p = vscode.Uri.joinPath(context.globalStorageUri, 'acil-profile.json').fsPath;
+  _profileFilePath = p;
   return p;
 }
 

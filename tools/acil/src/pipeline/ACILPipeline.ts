@@ -293,6 +293,7 @@ export class ACILPipeline {
 
   get audit(): AuditTrail           { return this._audit; }
   get enforcer(): BudgetEnforcer    { return this._enforcer; }
+  get profile(): BurnProfile        { return this._profile; }
   get balance(): number             { return this._enforcer.balance; }
   get currentState(): EnforcementState { return this._enforcer.currentState; }
   get totalAllocation(): number     { return this._enforcer.period.totalAllocation; }
