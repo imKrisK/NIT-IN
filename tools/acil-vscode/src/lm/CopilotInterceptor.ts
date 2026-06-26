@@ -173,8 +173,34 @@ export class CopilotInterceptor {
       }
     }
 
+    // ── CCT: Apply compressed input to messages (Phase 24 — Wave 10 Claim 8) ──
+    // preflight.cctApplied = true means the Chat-to-Completion Translator ran and
+    // produced a shorter, semantically equivalent prompt.
+    // Replace the last user message with the optimized text before transmission.
+    // This is the live firing of Claim 8: "reformatted prompt is transmitted in
+    // place of the original chat-format input."
+    let finalMessages = messages;
+    let finalInputTokens = inputTokens;
+
+    if (preflight.cctApplied && preflight.optimizedInput) {
+      // Rebuild messages array — replace last User message with compressed text
+      const lastUserIdx = messages.map(m => m.role).lastIndexOf(vscode.LanguageModelChatMessageRole.User);
+      if (lastUserIdx >= 0) {
+        finalMessages = [...messages];
+        finalMessages[lastUserIdx] = vscode.LanguageModelChatMessage.User(preflight.optimizedInput);
+        // Recount tokens on compressed input — this is what will actually be sent
+        finalInputTokens = await countTokensReal(model, preflight.optimizedInput, token);
+
+        // Log CCT savings to notifications (non-blocking toast)
+        const savedTokens = inputTokens - finalInputTokens;
+        if (savedTokens > 0) {
+          this._notifications.notifyCCTSavings(savedTokens, preflight.cctSavingsPct);
+        }
+      }
+    }
+
     // ── Forward to model ───────────────────────────────────────────────────
-    const response    = await model.sendRequest(messages, options, token);
+    const response = await model.sendRequest(finalMessages, options, token);
 
     // ── Stream + postflight ────────────────────────────────────────────────
     let outputText = '';
@@ -190,7 +216,8 @@ export class CopilotInterceptor {
         }
         // Stream complete — count actual output tokens with real tokenizer
         const outputTokens = await countTokensReal(model, outputText);
-        self._postflight(preflight, inputTokens, outputTokens, userId);
+        // Use finalInputTokens (post-CCT count) so audit records compressed token spend
+        self._postflight(preflight, finalInputTokens, outputTokens, userId);
       },
     };
 
