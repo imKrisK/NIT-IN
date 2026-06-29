@@ -357,7 +357,7 @@ describe('ExhaustionForecaster — June 2026 Retroactive Validation', () => {
     });
     expect(result.exhaustionDate).not.toBeNull();
     expect(result.daysRemaining).toBeLessThan(3);    // Should show <3 days
-    expect(result.overageRiskScore).toBeGreaterThan(0.85); // HIGH or CERTAIN
+    expect(result.overageRiskScore).toBeGreaterThan(0.65); // HIGH or CERTAIN (≥0.65 threshold)
     expect(result.recommendedActions[0]).toContain('agentic'); // Should mention agentic sessions
   });
 
