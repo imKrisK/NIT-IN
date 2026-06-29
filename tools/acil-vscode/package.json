@@ -82,6 +82,10 @@
           {
             "name": "budget",
             "description": "Set your monthly AI credit budget"
+          },
+          {
+            "name": "report",
+            "description": "Daily session breakdown — requests, cost, model mix (last 14 days)"
           }
         ]
       }

@@ -83,6 +83,10 @@ export class ACILChatParticipant implements vscode.Disposable {
       return {};
     }
 
+    if (request.command === 'report') {
+      return this._handleReport(response);
+    }
+
     // ── Default: intercepted model request ─────────────────────────────────
 
     const prompt    = request.prompt.trim();
@@ -143,6 +147,51 @@ export class ACILChatParticipant implements vscode.Disposable {
       `${riskPct}% overage risk · ` +
       `state: ${this._pipeline.currentState}*`,
     ].join('\n'));
+
+    return {};
+  }
+
+  // ── /report command ───────────────────────────────────────────────────────
+
+  private _handleReport(response: vscode.ChatResponseStream): vscode.ChatResult {
+    const dailyBurns = this._pipeline.audit.dailyBurns();
+    const summary    = this._pipeline.audit.summarize();
+
+    if (dailyBurns.length === 0) {
+      response.markdown('**ACIL Report:** No sessions recorded yet. Use `@acil` with any prompt to start tracking.');
+      return {};
+    }
+
+    const rows = dailyBurns.slice(-14).map(d =>
+      `| ${d.date} | ${d.totalRequests} | $${d.grossCost.toFixed(4)} | $${d.netCost.toFixed(4)} |`
+    ).join('\n');
+
+    const byModelRows = Object.entries(summary.byModel ?? {})
+      .sort(([,a], [,b]) => (b as number) - (a as number))
+      .map(([m, n]) => `| ${m} | ${n} |`)
+      .join('\n');
+
+    response.markdown([
+      `## 📋 ACIL Session Report (last 14 days)`,
+      '',
+      `| Date | Requests | Gross | Net |`,
+      `|------|----------|-------|-----|`,
+      rows,
+      '',
+      `**Totals:** ${summary.totalEvents} sessions · ${summary.totalTokens.toLocaleString()} tokens · $${summary.totalGross.toFixed(4)} gross · $${summary.totalDiscount.toFixed(4)} saved by quota`,
+      '',
+      `### By Model`,
+      `| Model | Sessions |`,
+      `|-------|----------|`,
+      byModelRows,
+      '',
+      `### By Session Type`,
+      ...Object.entries(summary.bySessionType ?? {}).map(([t, n]) => `- **${t}**: ${n} sessions`),
+      '',
+      summary.totalSubstitutions > 0
+        ? `### 🔄 Model Substitutions\n${Object.entries(summary.substitutionBreakdown ?? {}).map(([k, v]) => `- ${k}: ${v!.count}x · $${v!.totalSavingsUsd.toFixed(4)} saved`).join('\n')}`
+        : '',
+    ].filter(Boolean).join('\n'));
 
     return {};
   }

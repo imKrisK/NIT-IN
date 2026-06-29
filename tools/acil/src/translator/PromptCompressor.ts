@@ -20,6 +20,7 @@
  */
 
 import { SessionType } from '../core/types';
+import { SemanticEquivalenceChecker, SemanticEquivalenceOptions } from './SemanticEquivalenceChecker';
 
 export enum InputFormat {
   CHAT       = 'CHAT',        // OpenAI-style [{role, content}] array
@@ -28,19 +29,27 @@ export enum InputFormat {
 }
 
 export interface CompressionResult {
-  originalText:     string;
-  compressedText:   string;
-  originalTokenEst: number;    // Rough estimate (chars/4)
+  originalText:       string;
+  compressedText:     string;
+  originalTokenEst:   number;    // Rough estimate (chars/4)
   compressedTokenEst: number;
-  savingsPct:       number;    // 0.0–1.0
-  applied:          boolean;   // false if compression would degrade intent
+  savingsPct:         number;    // 0.0–1.0
+  applied:            boolean;   // false if compression would degrade intent
+  equivalenceScore?:  number;    // Wave 10 Claim 11: similarity score (0.0–1.0)
 }
 
 export class PromptCompressor {
+  private _checker: SemanticEquivalenceChecker;
+
+  constructor(opts: SemanticEquivalenceOptions = {}) {
+    this._checker = new SemanticEquivalenceChecker(opts);
+  }
+
   /**
    * Compress a developer's natural language input based on session type.
    * Strips chat overhead while preserving semantic intent.
    * Wave 10 Claim 8: the pre-transmission format optimization method.
+   * Wave 10 Claim 11: Jaccard equivalence gate (rejects if score < threshold).
    */
   compress(raw: string, sessionType: SessionType): CompressionResult {
     const originalEst = this._estimateTokens(raw);
@@ -83,15 +92,46 @@ export class PromptCompressor {
     const savings = originalEst > 0 ? 1 - compressedEst / originalEst : 0;
 
     // Reject if compression saves < 5% or text got longer
-    const applied = savings >= 0.05 && compressed.length < raw.length;
+    if (savings < 0.05 || compressed.length >= raw.length) {
+      return {
+        originalText:       raw,
+        compressedText:     raw,
+        originalTokenEst:   originalEst,
+        compressedTokenEst: originalEst,
+        savingsPct:         0,
+        applied:            false,
+        equivalenceScore:   1.0,
+      };
+    }
+
+    // Wave 10 Claim 11: semantic equivalence gate (synchronous Jaccard tier)
+    // DEBUGGING uses a lower threshold because stack trace compression intentionally
+    // removes node_modules frames (noise, not content) — Jaccard drops but intent is preserved.
+    // Other session types use the default threshold (0.72).
+    const effectiveThreshold = sessionType === SessionType.DEBUGGING ? 0.30 : 0.72;
+    this._checker.setThreshold(effectiveThreshold);
+    const eqResult = this._checker.checkSync(raw, compressed);
+    if (!eqResult.accepted) {
+      // Compression would alter semantic content — reject
+      return {
+        originalText:       raw,
+        compressedText:     raw,
+        originalTokenEst:   originalEst,
+        compressedTokenEst: originalEst,
+        savingsPct:         0,
+        applied:            false,
+        equivalenceScore:   eqResult.score,
+      };
+    }
 
     return {
-      originalText:      raw,
-      compressedText:    applied ? compressed : raw,
-      originalTokenEst:  originalEst,
-      compressedTokenEst: applied ? compressedEst : originalEst,
-      savingsPct:        applied ? savings : 0,
-      applied,
+      originalText:       raw,
+      compressedText:     compressed,
+      originalTokenEst:   originalEst,
+      compressedTokenEst: compressedEst,
+      savingsPct:         savings,
+      applied:            true,
+      equivalenceScore:   eqResult.score,
     };
   }
 

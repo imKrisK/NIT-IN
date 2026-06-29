@@ -45,7 +45,9 @@ export type { SessionBurnBaseline } from './predictor/BurnProfile';
 
 // Phase 5 — Chat-to-Completion Translator (CCT)
 export { PromptCompressor, InputFormat } from './translator/PromptCompressor';
-export type { CompressionResult } from './translator/PromptCompressor';
+export type { CompressionResult }        from './translator/PromptCompressor';
+export { SemanticEquivalenceChecker }    from './translator/SemanticEquivalenceChecker';
+export type { EquivalenceResult, EmbedFn, SemanticEquivalenceOptions } from './translator/SemanticEquivalenceChecker';
 
 // Phase 6 — Temporal Spend Predictor (TSP)
 export { BurnRateCalculator }     from './temporal/BurnRateCalculator';

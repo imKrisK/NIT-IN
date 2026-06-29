@@ -297,6 +297,57 @@ function getDashboardHtml(data: DashboardData): string {
       '<tr style="font-weight:600"><td>Total</td><td>' + data.summary.totalSubstitutions + 'x</td><td>$' + (data.summary.totalSubstitutionSavingsUsd ?? 0).toFixed(4) + '</td></tr>'
     : '<tr><td colspan="3" style="color:#555">No substitutions yet (requires THROTTLE state)</td></tr>';
 
+  // ── TSP Credit Balance Timeline SVG ────────────────────────────────────────
+  // Shows the projected balance draining to zero with exhaustion marker.
+  // The "balance line" starts at totalBudget and steps down by grossCost per day.
+  const TW = 720, TH = 160, TPAD = { top: 16, right: 20, bottom: 32, left: 56 };
+  const tChartW = TW - TPAD.left - TPAD.right;
+  const tChartH = TH - TPAD.top  - TPAD.bottom;
+
+  // Build balance points from all days (actual + projected)
+  const allDays = data.days;
+  const balancePoints: { x: number; y: number; projected: boolean }[] = [];
+  let runningBalance = data.totalBudget;
+  allDays.forEach((d, i) => {
+    runningBalance = Math.max(0, runningBalance - d.grossCost);
+    const x = TPAD.left + (i / Math.max(allDays.length - 1, 1)) * tChartW;
+    const y = TPAD.top + tChartH - (runningBalance / Math.max(data.totalBudget, 0.01)) * tChartH;
+    balancePoints.push({ x, y, projected: d.isProjected });
+  });
+
+  // Build polyline paths — split at projected boundary
+  const actualPoints  = balancePoints.filter(p => !p.projected).map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const projectedPoints = balancePoints.filter(p => p.projected).map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+  // 25% warning line
+  const warningY = TPAD.top + tChartH * 0.75;
+  const tspWarningLine = '<line x1="' + TPAD.left + '" y1="' + warningY.toFixed(1) + '" x2="' + (TW - TPAD.right) + '" y2="' + warningY.toFixed(1) + '" stroke="#ce9178" stroke-width="0.8" stroke-dasharray="4,4"/>' +
+    '<text x="' + (TPAD.left + 2) + '" y="' + (warningY - 3).toFixed(1) + '" fill="#ce9178" font-size="9">25%</text>';
+
+  // Y-axis labels
+  const tspYLabels = [0, 0.25, 0.5, 0.75, 1.0].map(f => {
+    const y = TPAD.top + tChartH - f * tChartH;
+    return '<text x="' + (TPAD.left - 4) + '" y="' + (y + 4).toFixed(1) + '" fill="#555" font-size="9" text-anchor="end">$' + (f * data.totalBudget).toFixed(0) + '</text>';
+  }).join('');
+
+  // Exhaustion marker on balance timeline
+  let tspExhaustLine = '';
+  if (data.forecast.exhaustionDate) {
+    const edIdx = allDays.findIndex(d => d.isProjected && d.date === new Date(data.forecast.exhaustionDate!).toISOString().slice(0, 10));
+    if (edIdx >= 0) {
+      const ex = TPAD.left + (edIdx / Math.max(allDays.length - 1, 1)) * tChartW;
+      tspExhaustLine = '<line x1="' + ex.toFixed(1) + '" y1="' + TPAD.top + '" x2="' + ex.toFixed(1) + '" y2="' + (TPAD.top + tChartH) + '" stroke="#f44747" stroke-width="1.5" stroke-dasharray="3,3"/>';
+    }
+  }
+
+  const tspSvg = '<svg viewBox="0 0 ' + TW + ' ' + TH + '" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:' + TW + 'px">' +
+    tspYLabels +
+    tspWarningLine +
+    tspExhaustLine +
+    (actualPoints ? '<polyline points="' + actualPoints + '" fill="none" stroke="#4ec9b0" stroke-width="2"/>' : '') +
+    (projectedPoints ? '<polyline points="' + projectedPoints + '" fill="none" stroke="rgba(78,201,176,0.5)" stroke-width="1.5" stroke-dasharray="5,3"/>' : '') +
+    '</svg>';
+
   return /* html */ `<!DOCTYPE html><head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
@@ -458,9 +509,20 @@ function getDashboardHtml(data: DashboardData): string {
   <button class="secondary" onclick="vscode.postMessage({command:'setMonthlyBudget'})">✎ Set Budget</button>
 </div>
 
+<div class="chart-wrap" style="margin-top:16px">
+  <div class="chart-title">📉 TSP Credit Balance Timeline (Temporal Spend Predictor)</div>
+  ${tspSvg}
+  <div class="legend">
+    <span><span class="dot" style="background:#4ec9b0"></span>Remaining balance</span>
+    <span><span class="dot" style="background:rgba(78,201,176,0.35)"></span>Projected</span>
+    <span><span class="dot" style="background:#f44747;width:3px;height:14px;border-radius:0"></span>Exhaustion</span>
+    <span><span class="dot" style="background:#3c3c3c;height:2px;margin-top:4px"></span>25% warning line</span>
+  </div>
+</div>
+
 ${data.lastSyncTime
-  ? `<div class="sync-note">Last synced from GitHub: ${new Date(data.lastSyncTime).toLocaleString()}</div>`
-  : `<div class="sync-note">Not synced from GitHub — using manual budget config. Use "Connect GitHub" to enable live sync.</div>`}
+  ? '<div class="sync-note">Last synced from GitHub: ' + new Date(data.lastSyncTime).toLocaleString() + '</div>'
+  : '<div class="sync-note">Not synced from GitHub — using manual budget config. Use "Connect GitHub" to enable live sync.</div>'}
 
 <script>
   const vscode = acquireVsCodeApi();
