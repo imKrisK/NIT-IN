@@ -19,7 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ACILPipeline, EnforcementState, SessionType } from '@nit-in/acil';
+import { ACILPipeline, EnforcementState, SessionType, MetaRecursiveLoop } from '@nit-in/acil';
 import { CopilotInterceptor } from './CopilotInterceptor';
 import { TelemetryCollector }  from '../TelemetryCollector';
 import { NotificationManager } from '../NotificationManager';
@@ -30,6 +30,7 @@ export class ACILChatParticipant implements vscode.Disposable {
   private _participant: vscode.ChatParticipant;
   private _interceptor: CopilotInterceptor;
   private _pipeline:    ACILPipeline;
+  private _loop:        MetaRecursiveLoop;
 
   constructor(
     pipeline:      ACILPipeline,
@@ -39,6 +40,7 @@ export class ACILChatParticipant implements vscode.Disposable {
   ) {
     this._pipeline    = pipeline;
     this._interceptor = new CopilotInterceptor(pipeline, telemetry, notifications);
+    this._loop        = new MetaRecursiveLoop();
 
     this._participant = vscode.chat.createChatParticipant(
       PARTICIPANT_ID,
@@ -94,22 +96,28 @@ export class ACILChatParticipant implements vscode.Disposable {
 
     if (!prompt) {
       response.markdown([
-        '**ACIL — AI Credit Intelligence Layer**',
+        '**⚡ ACIL — AI Credit Intelligence Layer**',
+        '*by [@imKrisK](https://github.com/imKrisK) · [conversationmine.ai](https://conversationmine.ai) · Patent Pending Wave 10*',
         '',
         'Commands:',
-        '- `/status` — current credit balance and enforcement state',
+        '- `/status` — credit balance, developer archetype, recursive calibration state',
         '- `/forecast` — temporal spend forecast and exhaustion date',
+        '- `/report` — 14-day daily usage breakdown',
         '- `/budget` — set your monthly AI credit budget',
         '',
-        'Or type any prompt and ACIL will classify, predict cost, and forward to the model.',
+        'Or type any prompt and ACIL will classify, predict cost, compress, and forward to the model.',
       ].join('\n'));
       return {};
     }
 
-    // Show pre-flight cost estimate while we await the response
-    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
+    // ── Run MetaRecursiveLoop calibration BEFORE preflight ─────────────────
+    // This is "prediction before token burn" — recursive self-calibration
+    const recursivePrediction = this._loop.calibrate(this._pipeline.audit);
+    const preClassifiedType   = recursivePrediction.preClassifiedSession;
 
-    response.progress('ACIL: Pre-flight cost check...');
+    response.progress(`ACIL: Pre-flight check (${preClassifiedType} · est. $${recursivePrediction.nextRequestCostEst.toFixed(3)})...`);
+
+    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
 
     const interceptResult = await this._interceptor.sendRequest(
       model, messages, {}, token, userId,
@@ -222,8 +230,18 @@ export class ACILChatParticipant implements vscode.Disposable {
           .join('\n')
       : '| — | 0 | $0.0000 |';
 
+    // MetaRecursive calibration status
+    const recursive   = this._loop.calibrate(this._pipeline.audit);
+    const archetypeStr = recursive.developerArchetype
+      ? `**${recursive.developerArchetype.archetype}** (${(recursive.developerArchetype.confidence * 100).toFixed(0)}% confidence)`
+      : 'Calibrating... (need 5+ sessions)';
+    const accuracyStr = recursive.predictionAccuracy !== null
+      ? `${(recursive.predictionAccuracy * 100).toFixed(0)}%`
+      : 'calibrating';
+
     response.markdown([
       `## ${stateEmoji[state]} ACIL Credit Status`,
+      `*by [@imKrisK](https://github.com/imKrisK) · [conversationmine.ai](https://conversationmine.ai) · Patent Pending Wave 10*`,
       '',
       `| Metric | Value |`,
       `|--------|-------|`,
@@ -242,6 +260,16 @@ export class ACILChatParticipant implements vscode.Disposable {
       `|---|---|---|`,
       substitutionLines,
       `| **Total saved** | **${summary.totalSubstitutions}x** | **$${(summary.totalSubstitutionSavingsUsd ?? 0).toFixed(4)}** |`,
+      '',
+      `### 🧠 Meta-Recursive Calibration (Wave 11)`,
+      `| Field | Value |`,
+      `|-------|-------|`,
+      `| Developer archetype | ${archetypeStr} |`,
+      `| Next session predicted | \`${recursive.preClassifiedSession}\` · ~$${recursive.nextRequestCostEst.toFixed(3)} |`,
+      `| CCT threshold (adapted) | ${(recursive.adaptedCCTThreshold * 100).toFixed(0)}% |`,
+      `| TSP multiplier (adapted) | ${recursive.adaptedTSPMultiplier.toFixed(2)}x |`,
+      `| Prediction accuracy | ${accuracyStr} |`,
+      `| Calibration generation | ${recursive.generation} |`,
     ].join('\n'));
 
     return {};

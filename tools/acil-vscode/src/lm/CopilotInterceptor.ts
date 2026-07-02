@@ -35,22 +35,48 @@ import { TelemetryCollector }  from '../TelemetryCollector';
 import { NotificationManager } from '../NotificationManager';
 
 // Maps VS Code model family strings to ACIL ModelId
+// Covers all known Copilot model IDs as of VS Code 1.90–1.95
+// Handles versioned names (claude-3-5-sonnet-20241022, gpt-4o-2024-11-20, etc.)
 const VSCODE_MODEL_MAP: Record<string, ModelId> = {
-  'gpt-4o':              ModelId.GPT_4O,
-  'gpt-4o-mini':         ModelId.GPT_4O_MINI,
-  'claude-3-5-sonnet':   ModelId.CLAUDE_SONNET_4,
-  'claude-3-haiku':      ModelId.CLAUDE_HAIKU_3,
-  'gemini-1.5-pro':      ModelId.GEMINI_1_5_PRO,
-  'gemini-1.5-flash':    ModelId.GEMINI_1_5_FLASH,
-  'copilot-gpt-4':       ModelId.COPILOT_PREMIUM,
-  'copilot-gpt-4o':      ModelId.COPILOT_PREMIUM,
-  'copilot':             ModelId.COPILOT_PREMIUM,
+  // Copilot variants
+  'copilot-gpt-4o':           ModelId.GPT_4O,
+  'copilot-gpt-4':            ModelId.COPILOT_PREMIUM,
+  'copilot':                  ModelId.COPILOT_PREMIUM,
+  'o1-mini':                  ModelId.GPT_4O_MINI,
+  'o1':                       ModelId.GPT_4O,
+  'o3-mini':                  ModelId.GPT_4O_MINI,
+  // GPT variants
+  'gpt-4o':                   ModelId.GPT_4O,
+  'gpt-4o-mini':              ModelId.GPT_4O_MINI,
+  'gpt-4':                    ModelId.GPT_4O,
+  // Claude variants — handles versioned suffixes like -20241022
+  'claude-3-5-sonnet':        ModelId.CLAUDE_SONNET_4,
+  'claude-3-7-sonnet':        ModelId.CLAUDE_SONNET_4,
+  'claude-sonnet':            ModelId.CLAUDE_SONNET_4,
+  'claude-3-haiku':           ModelId.CLAUDE_HAIKU_3,
+  'claude-haiku':             ModelId.CLAUDE_HAIKU_3,
+  // Gemini variants
+  'gemini-1.5-pro':           ModelId.GEMINI_1_5_PRO,
+  'gemini-2.0-flash':         ModelId.GEMINI_1_5_FLASH,
+  'gemini-1.5-flash':         ModelId.GEMINI_1_5_FLASH,
+  'gemini-flash':             ModelId.GEMINI_1_5_FLASH,
+  'gemini-pro':               ModelId.GEMINI_1_5_PRO,
 };
 
 function modelIdFromVSCode(model: vscode.LanguageModelChat): ModelId {
   const id = model.id.toLowerCase();
+  // Exact match first
+  if (VSCODE_MODEL_MAP[id]) return VSCODE_MODEL_MAP[id];
+  // Prefix match — handles versioned suffixes (claude-3-5-sonnet-20241022 → claude-3-5-sonnet)
   for (const [key, val] of Object.entries(VSCODE_MODEL_MAP)) {
-    if (id.includes(key)) return val;
+    if (id.startsWith(key) || id.includes(key)) return val;
+  }
+  // Family fallback: check model.family if available
+  const family = (model as { family?: string }).family?.toLowerCase() ?? '';
+  if (family) {
+    for (const [key, val] of Object.entries(VSCODE_MODEL_MAP)) {
+      if (family.includes(key)) return val;
+    }
   }
   return ModelId.COPILOT_PREMIUM; // safe default
 }

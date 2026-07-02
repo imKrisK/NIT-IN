@@ -421,7 +421,13 @@ function getDashboardHtml(data: DashboardData): string {
 </head>
 <body>
 
-<h1>⚡ ACIL Dashboard <span class="state-badge">${stateLabel[data.state]}</span></h1>
+<h1>⚡ ACIL Dashboard <span class="state-badge">${stateLabel[data.state]}</span>
+  <span style="font-size:11px;color:#555;font-weight:normal;margin-left:12px">
+    by <a href="https://github.com/imKrisK" style="color:#4ec9b0;text-decoration:none">@imKrisK</a>
+    · <a href="https://conversationmine.ai" style="color:#4ec9b0;text-decoration:none">conversationmine.ai</a>
+    · Patent Pending Wave 10
+  </span>
+</h1>
 
 <div class="cards">
   <div class="card">

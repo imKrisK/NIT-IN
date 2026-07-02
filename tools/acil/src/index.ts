@@ -26,6 +26,8 @@ export type { RouteInput, RouteResult, ModelScore } from './models/CostRouter';
 
 // Phase 4 — Pipeline Orchestrator
 export { ACILPipeline } from './pipeline/ACILPipeline';
+export { MetaRecursiveLoop } from './pipeline/MetaRecursiveLoop';
+export type { RecursivePrediction, LoopOutcome } from './pipeline/MetaRecursiveLoop';
 export type {
   PipelineRequest,
   PipelinePreflightResult,
@@ -37,9 +39,11 @@ export type {
 export { SessionClassifier }  from './classifier/SessionClassifier';
 export type { TelemetrySignals, ClassificationResult } from './classifier/SessionClassifier';
 
-// Phase 2 — Burn Predictor
+// Phase 2 — Burn Predictor + Developer Pattern Identifier
 export { BurnPredictor }  from './predictor/BurnPredictor';
 export { BurnProfile, BASELINE_BURN_PROFILES } from './predictor/BurnProfile';
+export { DeveloperPatternIdentifier } from './predictor/DeveloperPatternIdentifier';
+export type { ArchetypeProfile, DeveloperArchetype } from './predictor/DeveloperPatternIdentifier';
 export type { PredictInput } from './predictor/BurnPredictor';
 export type { SessionBurnBaseline } from './predictor/BurnProfile';
 

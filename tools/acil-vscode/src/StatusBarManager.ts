@@ -43,7 +43,7 @@ export class StatusBarManager implements vscode.Disposable {
       vscode.StatusBarAlignment.Right, 1000
     );
     this._mainItem.command = 'acil.showDashboard';
-    this._mainItem.tooltip  = 'ACIL: Click to open dashboard';
+    this._mainItem.tooltip  = 'ACIL — AI Credit Intelligence Layer\nby @imKrisK (github.com/imKrisK)\nClick to open dashboard';
 
     // CCT savings counter
     this._cctItem = vscode.window.createStatusBarItem(

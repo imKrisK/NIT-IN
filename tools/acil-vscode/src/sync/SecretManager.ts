@@ -5,14 +5,18 @@
  * GitHub Personal Access Token used by GitHubCreditSync.
  *
  * The PAT never touches disk, env vars, or source code.
- * It lives exclusively in VS Code's OS keychain-backed secret store
- * (macOS Keychain / Windows Credential Manager / libsecret on Linux).
+ * VS Code SecretStorage is backed by:
+ *   - macOS: macOS Keychain (tested ✅)
+ *   - Windows: Windows Credential Manager (supported ✅ via VS Code)
+ *   - Linux: libsecret / GNOME Keyring / KWallet (supported ✅ via VS Code)
+ *
+ * Note: On Linux headless servers (CI, SSH), SecretStorage may not be
+ * available. In that case, ACIL falls back to manual budget config.
+ * No PAT is required — GitHub sync is optional.
  *
  * Required GitHub PAT scopes:
- *   - read:user
- *   - copilot  (if available)
- *   OR
- *   - read:org  (for org-level Copilot billing endpoint)
+ *   - read:user    (confirms auth works, gets username)
+ *   - copilot      (if available — gets quota data)
  *
  * Minimum scope that works for personal accounts: read:user
  */
