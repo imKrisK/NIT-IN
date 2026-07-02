@@ -139,10 +139,26 @@ export class ACILChatParticipant implements vscode.Disposable {
     }
 
     let chunkCount = 0;
+    let outputText = '';
     for await (const chunk of interceptResult.text) {
       if (token.isCancellationRequested) break;
       response.markdown(chunk);
+      outputText += chunk;
       chunkCount++;
+    }
+
+    // ── Close the MetaRecursiveLoop with the actual outcome ────────────────
+    // This is what makes the loop self-improving: actual vs predicted fed back
+    const latestEvents = this._pipeline.audit.export();
+    const lastEvent    = latestEvents[latestEvents.length - 1];
+    if (lastEvent) {
+      this._loop.recordOutcome({
+        predictedCost:  recursivePrediction.nextRequestCostEst,
+        actualCost:     lastEvent.grossCost,
+        predictedType:  recursivePrediction.preClassifiedSession,
+        actualType:     lastEvent.sessionType,
+        timestamp:      new Date(),
+      });
     }
 
     // Show compact ACIL footer after response
