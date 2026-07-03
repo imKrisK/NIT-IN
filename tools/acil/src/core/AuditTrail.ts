@@ -49,8 +49,7 @@ export interface AuditSummary {
 
 export class AuditTrail {
   private _events: SessionEvent[] = [];
-  private _enforcementLog: Array<{ timestamp: Date; state: EnforcementState }> = [];
-
+  private _enforcementLog: Array<{ timestamp: Date; state: EnforcementState }> = [];  private _burnSeeds?: Map<string, { grossCost: number; totalRequests: number }>;
   /**
    * Append a completed SessionEvent to the audit trail.
    * Called by the metering pipeline after each API call completes.
@@ -115,6 +114,25 @@ export class AuditTrail {
         byModel:       byModel,
         hitOverage:    net > 0,
       });
+    }
+
+    // P3: Merge GitHub historical seed data for dates with no real ACIL events
+    if (this._burnSeeds) {
+      for (const [date, seed] of this._burnSeeds.entries()) {
+        if (!records.find(r => r.date === date)) {
+          records.push({
+            date,
+            totalRequests:  seed.totalRequests,
+            grossCost:      seed.grossCost,
+            discountAmount: seed.grossCost, // fully within quota (seed assumption)
+            netCost:        0,
+            bySessionType:  {},
+            byModel:        {},
+            hitOverage:     false,
+          });
+        }
+      }
+      records.sort((a, b) => a.date.localeCompare(b.date));
     }
 
     return records;
@@ -252,6 +270,28 @@ export class AuditTrail {
     }
 
     return csv;
+  }
+
+  /**
+   * Seed a synthetic daily burn record from GitHub historical data.
+   * Used on day-1 install to give TSP real burn rate data immediately.
+   * Seeded records are NOT real sessions — they have no eventId, modelId, etc.
+   * They only affect dailyBurns() output for TSP burn rate calculation.
+   * Safe to call multiple times — deduplicates by date.
+   */
+  _seedDailyBurn(date: string, grossCost: number, totalRequests: number): void {
+    // Store seeds in a separate map, merged into dailyBurns() output
+    if (!this._burnSeeds) this._burnSeeds = new Map<string, { grossCost: number; totalRequests: number }>();
+    // Don't overwrite if we already have real data for this date
+    const existing = this._events.some(e => {
+      const d = e.timestamp instanceof Date
+        ? e.timestamp.toISOString().slice(0, 10)
+        : String(e.timestamp).slice(0, 10);
+      return d === date;
+    });
+    if (!existing) {
+      this._burnSeeds.set(date, { grossCost, totalRequests });
+    }
   }
 
   /**

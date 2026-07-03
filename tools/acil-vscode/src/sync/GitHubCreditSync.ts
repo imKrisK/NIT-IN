@@ -91,6 +91,48 @@ export class GitHubCreditSync {
   }
 
   /**
+   * Fetch daily usage breakdown from GitHub API for TSP seeding.
+   * Returns array of daily burn records (last 30 days) if the API supports it.
+   *
+   * P3: Seeds the AuditTrail with historical data on day-1 install so TSP
+   * has real burn rate data immediately rather than waiting 7 days.
+   *
+   * The GitHub API endpoint /user/copilot/billing/usage returns per-day
+   * premium_requests counts if the PAT has `copilot` scope.
+   * Falls back to a single synthesized record if the endpoint returns 404.
+   */
+  async fetchDailyHistory(): Promise<Array<{ date: string; requests: number; grossCost: number }>> {
+    try {
+      const res = await this._get('/user/copilot/billing/usage');
+      if (!res.ok) {
+        // Synthesize a single record from the consumed total if detailed data unavailable
+        const copilotRes = await this._get('/user/copilot');
+        if (!copilotRes.ok) return [];
+        const copilot = await copilotRes.json() as GitHubCopilotAPIResponse;
+        const consumed = copilot.premium_requests_consumed ?? 0;
+        if (consumed === 0) return [];
+        // Distribute evenly over the current billing period as a fallback seed
+        const today     = new Date();
+        const dayOfMonth = today.getDate();
+        const dailyAvg  = consumed / Math.max(dayOfMonth, 1);
+        return [{ date: today.toISOString().slice(0, 10), requests: Math.round(dailyAvg), grossCost: dailyAvg * 0.04 }];
+      }
+
+      const usage = await res.json() as GitHubCopilotUsageResponse;
+      if (!usage.breakdown || !Array.isArray(usage.breakdown)) return [];
+
+      return usage.breakdown.map(d => ({
+        date:      d.day,
+        requests:  d.premium_requests,
+        grossCost: d.premium_requests * 0.04,
+      })).filter(d => d.requests > 0);
+
+    } catch {
+      return []; // Network error — silent fallback
+    }
+  }
+
+  /**
    * Convert GitHub API response to ACIL BudgetPeriod.
    * Maps premium requests → dollar-equivalent budget using GitHub's
    * published pricing: 1 premium request = $0.04 (overage rate).

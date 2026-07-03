@@ -51,6 +51,8 @@ import { ACILPipeline } from '../pipeline/ACILPipeline';
 import { SessionType } from '../core/types';
 import { DeveloperPatternIdentifier, ArchetypeProfile, SessionRecord, DailyRecord } from '../predictor/DeveloperPatternIdentifier';
 import { AuditTrail } from '../core/AuditTrail';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface RecursivePrediction {
   /** Archetype derived from historical patterns */
@@ -80,10 +82,14 @@ export interface LoopOutcome {
 }
 
 export class MetaRecursiveLoop {
-  private _identifier:  DeveloperPatternIdentifier;
-  private _generation:  number = 0;
-  private _outcomes:    LoopOutcome[] = [];
-  private _lastProfile: ArchetypeProfile | null = null;
+  private _identifier:      DeveloperPatternIdentifier;
+  private _generation:      number = 0;
+  private _outcomes:        LoopOutcome[] = [];
+  private _lastProfile:     ArchetypeProfile | null = null;
+  // TTL cache — prevents double-calibrate within 60 seconds
+  private _lastCalibrated:  number = 0;
+  private _lastPrediction:  RecursivePrediction | null = null;
+  private static readonly CACHE_TTL_MS = 60_000;
 
   constructor() {
     this._identifier = new DeveloperPatternIdentifier();
@@ -91,13 +97,14 @@ export class MetaRecursiveLoop {
 
   /**
    * Run the meta-recursive calibration loop.
-   * Call this BEFORE each preflight to get adapted parameters.
-   *
-   * This is the "prediction before token burn" — the system knows
-   * what type of request is coming and how much it will cost before
-   * the developer finishes typing.
+   * TTL-cached: returns the last result if called within 60 seconds.
+   * Prevents double-calibrate from /status + preflight on the same request.
    */
   calibrate(audit: AuditTrail): RecursivePrediction {
+    const now = Date.now();
+    if (this._lastPrediction && (now - this._lastCalibrated) < MetaRecursiveLoop.CACHE_TTL_MS) {
+      return this._lastPrediction; // cache hit — same result, no generation bump
+    }
     const summary    = audit.summarize();
     const dailyBurns = audit.dailyBurns();
     const events     = audit.export();
@@ -126,7 +133,7 @@ export class MetaRecursiveLoop {
     const cctThreshold   = this._adaptCCTThreshold(this._lastProfile);
     const accuracy       = this._computeAccuracy();
 
-    return {
+    const result: RecursivePrediction = {
       developerArchetype:   this._lastProfile,
       preClassifiedSession: preClassified,
       nextRequestCostEst:   nextCostEst,
@@ -136,6 +143,10 @@ export class MetaRecursiveLoop {
       generation:           this._generation,
       calibratedAt:         new Date(),
     };
+    // Update TTL cache
+    this._lastCalibrated = Date.now();
+    this._lastPrediction = result;
+    return result;
   }
 
   /**
@@ -172,6 +183,44 @@ export class MetaRecursiveLoop {
 
   get lastProfile(): ArchetypeProfile | null { return this._lastProfile; }
   get generation(): number { return this._generation; }
+
+  /**
+   * Persist prediction outcomes to disk (atomic write).
+   * Call on VS Code deactivate() alongside audit.save().
+   */
+  save(filePath: string): void {
+    const payload = JSON.stringify({
+      version:    1,
+      generation: this._generation,
+      outcomes:   this._outcomes,
+    }, null, 2);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmp = filePath + '.tmp';
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, filePath);
+  }
+
+  /**
+   * Load persisted outcomes from previous VS Code session.
+   * Silent no-op if file doesn't exist (first run).
+   */
+  load(filePath: string): void {
+    if (!fs.existsSync(filePath)) return;
+    try {
+      const raw  = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(raw) as {
+        version: number; generation: number; outcomes: LoopOutcome[];
+      };
+      if (!Array.isArray(data.outcomes)) return;
+      this._generation = data.generation ?? 0;
+      // Rehydrate Date objects
+      this._outcomes = data.outcomes.map(o => ({
+        ...o,
+        timestamp: new Date(o.timestamp),
+      }));
+    } catch { /* corrupted file — ignore */ }
+  }
 
   // ── Private ──────────────────────────────────────────────────────────────────
 

@@ -28,6 +28,7 @@ import {
   ModelId,
   SessionType,
   QualityRequirement,
+  MetaRecursiveLoop,
 } from '@nit-in/acil';
 import { StatusBarManager }    from './StatusBarManager';
 import { TelemetryCollector }  from './TelemetryCollector';
@@ -36,6 +37,8 @@ import { SecretManager }       from './sync/SecretManager';
 import { GitHubCreditSync }    from './sync/GitHubCreditSync';
 import { DashboardPanel }      from './dashboard/DashboardPanel';
 import { ACILChatParticipant } from './lm/ChatParticipant';
+import { WorkspaceConfigLoader } from './config/WorkspaceConfigLoader';
+import { CursorAdapter, isRunningInCursor } from './adapters/CursorAdapter';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
 
@@ -47,8 +50,11 @@ let secrets:          SecretManager | undefined;
 let _extensionUri:    vscode.Uri | undefined;
 let _auditFilePath:   string | undefined;
 let _profileFilePath: string | undefined;
+let _outcomesFilePath: string | undefined;
 let _chatParticipant: ACILChatParticipant | undefined;
 let _output:          vscode.OutputChannel | undefined;
+let _loop:            MetaRecursiveLoop | undefined;
+let _wsConfig:        WorkspaceConfigLoader | undefined;
 let cctSavedTodal   = 0;
 let _syncTimer:       ReturnType<typeof setInterval> | undefined;
 
@@ -89,6 +95,27 @@ export function activate(context: vscode.ExtensionContext): void {
       _output.appendLine(`[ACIL] Burn profile load skipped (first run): ${e}`);
     }
 
+    // ── WorkspaceConfigLoader (team budgets — P2) ──────────────────────────
+    _wsConfig = new WorkspaceConfigLoader();
+    _wsConfig.load();
+    if (_wsConfig.hasWorkspaceConfig) {
+      _output.appendLine(`[ACIL] Workspace config loaded — team: ${_wsConfig.teamName ?? 'unnamed'} | policy: ${_wsConfig.enforcementPolicy}`);
+    }
+    context.subscriptions.push(_wsConfig.watchWorkspace(() => {
+      _wsConfig!.load();
+      _output?.appendLine('[ACIL] Workspace config reloaded (.acil.json changed)');
+    }));
+
+    // ── MetaRecursiveLoop — load persisted outcomes ────────────────────────
+    _loop = new MetaRecursiveLoop();
+    _outcomesFilePath = getOutcomesFilePath(context);
+    try {
+      _loop.load(_outcomesFilePath);
+      _output.appendLine(`[ACIL] MetaRecursiveLoop loaded: generation ${_loop.generation}`);
+    } catch (e) {
+      _output.appendLine(`[ACIL] MetaRecursiveLoop: fresh start (${e})`);
+    }
+
     // ── Status bar + initial render ────────────────────────────────────────
     refreshStatusBar();
     statusBar.show?.();
@@ -102,12 +129,20 @@ export function activate(context: vscode.ExtensionContext): void {
     const _refreshTimer = setInterval(() => refreshStatusBar(), 60 * 1000);
     context.subscriptions.push({ dispose: () => clearInterval(_refreshTimer) });
 
-    // ── Register @acil chat participant (unconditional) ──────────────────────
-    _chatParticipant = new ACILChatParticipant(
-      pipeline, telemetry, notifications, getUserId(config),
-    );
-    context.subscriptions.push(_chatParticipant);
-    _output.appendLine('[ACIL] Chat participant registered: acil.assistant');
+    // ── Register @acil chat participant — or Cursor adapter ─────────────────
+    if (isRunningInCursor()) {
+      // Cursor mode: limited adapter (no vscode.lm)
+      const cursorAdapter = new CursorAdapter(pipeline);
+      context.subscriptions.push(cursorAdapter);
+      _output.appendLine('[ACIL] Cursor IDE detected — CursorAdapter active (limited mode)');
+    } else {
+      // VS Code mode: full chat participant
+      _chatParticipant = new ACILChatParticipant(
+        pipeline, telemetry, notifications, getUserId(config),
+      );
+      context.subscriptions.push(_chatParticipant);
+      _output.appendLine('[ACIL] Chat participant registered: acil.assistant');
+    }
 
     // ── Register Commands ────────────────────────────────────────────────────
     context.subscriptions.push(
@@ -156,12 +191,16 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   if (_syncTimer) clearInterval(_syncTimer);
   _chatParticipant?.dispose();
-  // Persist audit + burn profile so history survives VS Code restart
+  _wsConfig?.dispose();
+  // Persist audit + burn profile + loop outcomes
   if (pipeline && _auditFilePath) {
     try { pipeline.audit.save(_auditFilePath); } catch { /* best-effort */ }
   }
   if (pipeline && _profileFilePath) {
     try { pipeline.profile.save(_profileFilePath); } catch { /* best-effort */ }
+  }
+  if (_loop && _outcomesFilePath) {
+    try { _loop.save(_outcomesFilePath); } catch { /* best-effort */ }
   }
   statusBar?.dispose();
   telemetry?.dispose();
@@ -213,6 +252,20 @@ async function syncGitHubBalance(showNotification = false): Promise<void> {
   }
 
   const data = result.data;
+
+  // P3: Seed AuditTrail with GitHub daily history for TSP day-1 accuracy
+  // Only on first sync (audit is empty) — prevents duplicate seeding
+  if (pipeline && pipeline.audit.summarize().totalEvents === 0) {
+    const history = await sync.fetchDailyHistory();
+    if (history.length > 0) {
+      _output?.appendLine(`[ACIL] Seeded ${history.length} days of GitHub history for TSP`);
+      // History is injected as synthetic audit records to seed the burn rate
+      // (read-only seed — doesn't affect billing, only TSP projection)
+      for (const day of history) {
+        (pipeline.audit as any)._seedDailyBurn?.(day.date, day.grossCost, day.requests);
+      }
+    }
+  }
 
   // Rebuild pipeline with live budget period from GitHub
   const livePeriod    = sync.toBudgetPeriod(data);
@@ -461,6 +514,12 @@ function getAuditFilePath(context: vscode.ExtensionContext): string {
 function getProfileFilePath(context: vscode.ExtensionContext): string {
   const p = vscode.Uri.joinPath(context.globalStorageUri, 'acil-profile.json').fsPath;
   _profileFilePath = p;
+  return p;
+}
+
+function getOutcomesFilePath(context: vscode.ExtensionContext): string {
+  const p = vscode.Uri.joinPath(context.globalStorageUri, 'acil-outcomes.json').fsPath;
+  _outcomesFilePath = p;
   return p;
 }
 
