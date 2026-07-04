@@ -30,9 +30,12 @@ import {
   ModelId,
   QualityRequirement,
   SessionType,
+  PromptCompressor,
+  SemanticEquivalenceChecker,
 } from '@nit-in/acil';
 import { TelemetryCollector }  from '../TelemetryCollector';
 import { NotificationManager } from '../NotificationManager';
+import { VSCodeEmbedBridge }   from './VSCodeEmbedBridge';
 
 // Maps VS Code model family strings to ACIL ModelId
 // Covers all known Copilot model IDs as of VS Code 1.90–1.95
@@ -109,6 +112,7 @@ export class CopilotInterceptor {
   private _pipeline:      ACILPipeline;
   private _telemetry:     TelemetryCollector;
   private _notifications: NotificationManager;
+  private _embedBridge:   VSCodeEmbedBridge;
 
   constructor(
     pipeline:      ACILPipeline,
@@ -118,6 +122,8 @@ export class CopilotInterceptor {
     this._pipeline      = pipeline;
     this._telemetry     = telemetry;
     this._notifications = notifications;
+    // Tier 2: TF-IDF cosine by default — upgraded to LM-scored on first sendRequest()
+    this._embedBridge   = new VSCodeEmbedBridge();
   }
 
   /**
@@ -200,29 +206,36 @@ export class CopilotInterceptor {
     }
 
     // ── CCT: Apply compressed input to messages (Phase 24 — Wave 10 Claim 8) ──
-    // preflight.cctApplied = true means the Chat-to-Completion Translator ran and
-    // produced a shorter, semantically equivalent prompt.
-    // Replace the last user message with the optimized text before transmission.
-    // This is the live firing of Claim 8: "reformatted prompt is transmitted in
-    // place of the original chat-format input."
-    let finalMessages = messages;
+    let finalMessages    = messages;
     let finalInputTokens = inputTokens;
 
     if (preflight.cctApplied && preflight.optimizedInput) {
-      // Rebuild messages array — replace last User message with compressed text
-      const lastUserIdx = messages.map(m => m.role).lastIndexOf(vscode.LanguageModelChatMessageRole.User);
-      if (lastUserIdx >= 0) {
-        finalMessages = [...messages];
-        finalMessages[lastUserIdx] = vscode.LanguageModelChatMessage.User(preflight.optimizedInput);
-        // Recount tokens on compressed input — this is what will actually be sent
-        finalInputTokens = await countTokensReal(model, preflight.optimizedInput, token);
+      // Tier 2 — LM-Scored Semantic Equivalence Check (Wave 10 Claim 11)
+      // Upgrade bridge to active model on first request (lazy init)
+      this._embedBridge.setModel(model);
+      const eqResult = await this._embedBridge.scorePair(
+        promptText,
+        preflight.optimizedInput,
+        token,
+      );
 
-        // Log CCT savings to notifications (non-blocking toast)
-        const savedTokens = inputTokens - finalInputTokens;
-        if (savedTokens > 0) {
-          this._notifications.notifyCCTSavings(savedTokens, preflight.cctSavingsPct);
+      const shouldApply = eqResult.score >= 0.72; // Claim 11 threshold
+
+      if (shouldApply) {
+        // Compression is semantically safe — use it
+        const lastUserIdx = messages.map(m => m.role)
+          .lastIndexOf(vscode.LanguageModelChatMessageRole.User);
+        if (lastUserIdx >= 0) {
+          finalMessages = [...messages];
+          finalMessages[lastUserIdx] = vscode.LanguageModelChatMessage.User(preflight.optimizedInput);
+          finalInputTokens = await countTokensReal(model, preflight.optimizedInput, token);
+          const savedTokens = inputTokens - finalInputTokens;
+          if (savedTokens > 0) {
+            this._notifications.notifyCCTSavings(savedTokens, preflight.cctSavingsPct);
+          }
         }
       }
+      // If Tier 2 rejects (score < 0.72): original messages used — safe fallback
     }
 
     // ── Forward to model ───────────────────────────────────────────────────
