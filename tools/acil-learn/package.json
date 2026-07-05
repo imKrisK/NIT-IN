@@ -1,0 +1,30 @@
+{
+  "name": "@nit-in/acil-learn",
+  "version": "0.1.0",
+  "description": "ACIL Meta-Recursive Learning SDK — self-calibrating LLM cost governance for third-party embedding.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "tsc --noEmit"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/__tests__/**/*.test.ts"]
+  },
+  "keywords": ["llm", "ai-credits", "meta-learning", "acil", "token-governance"],
+  "author": "Kristoffer Kelly (imKrisK)",
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "@nit-in/acil": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.0.0",
+    "@types/jest": "^30.0.0",
+    "ts-jest": "^29.0.0",
+    "@nit-in/acil": "file:../acil"
+  }
+}

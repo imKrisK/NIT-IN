@@ -349,4 +349,139 @@ export class AuditTrail {
       // Corrupted file — ignore, don't crash
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HMAC-Signed Audit Batch Export  (Wave 11 — Compliance Feature)
+  //
+  // Produces a tamper-proof audit package for regulated industry submissions:
+  //   SOC 2 / HIPAA AI policies / EU AI Act Art. 13 audit obligations.
+  //
+  // The signed batch contains:
+  //   - Full CSV export (matching GitHub Copilot billing column format)
+  //   - SHA-256 hash of the CSV payload
+  //   - HMAC-SHA256 signature of (csvHash + batchId + timestamp)
+  //   - Batch metadata (eventCount, periodStart, periodEnd)
+  //
+  // A compliance officer can independently verify the signature using
+  // verifyBatch() with the same HMAC key — proving the CSV was not modified
+  // after the developer's IDE generated it.
+  //
+  // Author: imKrisK — Wave 11 Enterprise Feature
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Export audit events as a signed compliance batch.
+   *
+   * @param hmacKey   Shared secret (store in secrets manager — never in code)
+   * @param filePath  Optional — write the JSON envelope to disk (atomic)
+   */
+  exportSignedBatch(hmacKey: string, filePath?: string): SignedAuditBatch {
+    const crypto = require('crypto') as typeof import('crypto');
+
+    const csv       = this.exportCSV();
+    const batchId   = crypto.randomUUID();
+    const timestamp = new Date().toISOString();
+
+    // Step 1 — SHA-256 over CSV content (content integrity)
+    const csvHash = crypto.createHash('sha256').update(csv, 'utf8').digest('hex');
+
+    // Step 2 — HMAC-SHA256 over (csvHash + batchId + timestamp)
+    //          Binds the hash to a unique batch identity + issue time.
+    //          Prevents replay of an older valid batch as a newer one.
+    const sigPayload = csvHash + batchId + timestamp;
+    const signature  = crypto
+      .createHmac('sha256', hmacKey)
+      .update(sigPayload, 'utf8')
+      .digest('hex');
+
+    const batch: SignedAuditBatch = {
+      batchId,
+      timestamp,
+      algorithm:  'sha256-hmac',
+      csvHash,
+      signature,
+      eventCount: this._events.length,
+      periodStart: this._events.length > 0
+        ? this._events[0].timestamp.toISOString()
+        : timestamp,
+      periodEnd: this._events.length > 0
+        ? this._events[this._events.length - 1].timestamp.toISOString()
+        : timestamp,
+      csv,
+    };
+
+    if (filePath) {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const tmp = filePath + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(batch, null, 2), 'utf8');
+      fs.renameSync(tmp, filePath);
+    }
+
+    return batch;
+  }
+
+  /**
+   * Verify a previously exported SignedAuditBatch.
+   *
+   * Returns a detailed result so a compliance tool can surface exactly
+   * what passed or failed rather than just a boolean.
+   */
+  static verifyBatch(batch: SignedAuditBatch, hmacKey: string): AuditVerifyResult {
+    const crypto = require('crypto') as typeof import('crypto');
+
+    // Step 1 — Recompute CSV hash
+    const recomputedCsvHash = crypto
+      .createHash('sha256')
+      .update(batch.csv, 'utf8')
+      .digest('hex');
+    const csvIntact = recomputedCsvHash === batch.csvHash;
+
+    // Step 2 — Recompute HMAC
+    const sigPayload     = batch.csvHash + batch.batchId + batch.timestamp;
+    const expectedSig    = crypto
+      .createHmac('sha256', hmacKey)
+      .update(sigPayload, 'utf8')
+      .digest('hex');
+    const expBuf         = Buffer.from(expectedSig, 'hex');
+    const actBuf         = Buffer.from(batch.signature, 'hex');
+    const signatureValid = expBuf.length === actBuf.length
+      && crypto.timingSafeEqual(expBuf, actBuf);
+
+    return {
+      valid:          csvIntact && signatureValid,
+      csvIntact,
+      signatureValid,
+      batchId:        batch.batchId,
+      eventCount:     batch.eventCount,
+      periodStart:    batch.periodStart,
+      periodEnd:      batch.periodEnd,
+      verifiedAt:     new Date().toISOString(),
+    };
+  }
+}
+
+// ── HMAC Audit Batch types ─────────────────────────────────────────────────
+
+export interface SignedAuditBatch {
+  batchId:     string;         // UUID — unique per export
+  timestamp:   string;         // ISO-8601 — when the batch was signed
+  algorithm:   'sha256-hmac';
+  csvHash:     string;         // SHA-256 hex of the CSV payload
+  signature:   string;         // HMAC-SHA256 hex of (csvHash + batchId + timestamp)
+  eventCount:  number;
+  periodStart: string;         // ISO-8601 of first event
+  periodEnd:   string;         // ISO-8601 of last event
+  csv:         string;         // Full CSV — included so verifier has the original
+}
+
+export interface AuditVerifyResult {
+  valid:          boolean;     // true only if both csvIntact AND signatureValid
+  csvIntact:      boolean;     // SHA-256 of embedded CSV matches recorded hash
+  signatureValid: boolean;     // HMAC recomputation matches stored signature
+  batchId:        string;
+  eventCount:     number;
+  periodStart:    string;
+  periodEnd:      string;
+  verifiedAt:     string;
 }

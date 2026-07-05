@@ -127,6 +127,16 @@ export class WorkspaceConfigLoader {
     this._watcher?.dispose();
   }
 
+  /**
+   * Apply a remotely fetched policy (from PolicyClient).
+   * Remote policy takes precedence over local .acil.json.
+   * Does NOT write to disk — lives only in memory.
+   */
+  applyRemote(remote: ACILWorkspaceConfig): void {
+    // Merge: remote fields override local, but local non-overridden fields survive
+    this._config = { ...this._config, ...remote };
+  }
+
   private _findConfigFile(): string | null {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) return null;

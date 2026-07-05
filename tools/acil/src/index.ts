@@ -14,7 +14,7 @@ export { AuditTrail }       from './core/AuditTrail';
 export type { MeterResult }        from './core/TokenMeter';
 export type { BillingResult }      from './core/CreditBilling';
 export type { EnforcementDecision } from './core/BudgetEnforcer';
-export type { DailyBurnRecord, AuditSummary } from './core/AuditTrail';
+export type { DailyBurnRecord, AuditSummary, SignedAuditBatch, AuditVerifyResult } from './core/AuditTrail';
 
 // Model pricing and routing config
 export { MODEL_PRICING, THROTTLE_SUBSTITUTION } from './models/PricingConfig';

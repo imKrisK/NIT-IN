@@ -39,6 +39,7 @@ import { DashboardPanel }      from './dashboard/DashboardPanel';
 import { ACILChatParticipant } from './lm/ChatParticipant';
 import { WorkspaceConfigLoader } from './config/WorkspaceConfigLoader';
 import { CursorAdapter, isRunningInCursor } from './adapters/CursorAdapter';
+import { PolicyClient } from './policy/PolicyClient';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ let _chatParticipant: ACILChatParticipant | undefined;
 let _output:          vscode.OutputChannel | undefined;
 let _loop:            MetaRecursiveLoop | undefined;
 let _wsConfig:        WorkspaceConfigLoader | undefined;
+let _policyClient:    PolicyClient | undefined;
 let cctSavedTodal   = 0;
 let _syncTimer:       ReturnType<typeof setInterval> | undefined;
 
@@ -105,6 +107,32 @@ export function activate(context: vscode.ExtensionContext): void {
       _wsConfig!.load();
       _output?.appendLine('[ACIL] Workspace config reloaded (.acil.json changed)');
     }));
+
+    // ── PolicyClient — remote policy server (optional enterprise feature) ──
+    const policyServerUrl = config.get<string>('policyServerUrl', '');
+    const policyTeamId    = config.get<string>('policyTeamId', '');
+    if (policyServerUrl && policyTeamId) {
+      const pollMs = config.get<number>('policyPollIntervalMs', 60_000);
+      // Fetch HMAC key from secret storage (never from settings — it's a secret)
+      void context.secrets.get('acil.policyHmacKey').then(hmacKey => {
+        _policyClient = new PolicyClient({
+          serverUrl:       policyServerUrl,
+          teamId:          policyTeamId,
+          hmacKey:         hmacKey ?? undefined,
+          pollIntervalMs:  pollMs,
+        });
+        _policyClient.start((remoteCfg, result) => {
+          _output?.appendLine(
+            `[ACIL] Remote policy applied — team: ${remoteCfg.teamName ?? policyTeamId} | verified: ${result.verified} | signed: ${result.signed}`
+          );
+          // Remote policy takes priority over local .acil.json
+          _wsConfig?.applyRemote(remoteCfg);
+          refreshStatusBar();
+        });
+        context.subscriptions.push({ dispose: () => _policyClient?.stop() });
+        _output?.appendLine(`[ACIL] PolicyClient started → ${policyServerUrl}/policy/${policyTeamId}`);
+      });
+    }
 
     // ── MetaRecursiveLoop — load persisted outcomes ────────────────────────
     _loop = new MetaRecursiveLoop();
