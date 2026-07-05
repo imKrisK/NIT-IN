@@ -1,0 +1,24 @@
+{
+  "name": "@nit-in/acil-mcp",
+  "version": "0.1.0",
+  "description": "ACIL Model Context Protocol server — exposes ACIL cost governance as MCP tools for Cursor, Claude Desktop, and any MCP client.",
+  "main": "dist/server.js",
+  "bin": {
+    "acil-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts"
+  },
+  "keywords": ["mcp", "llm", "ai-credits", "acil", "cursor", "token-governance"],
+  "author": "Kristoffer Kelly (imKrisK)",
+  "license": "UNLICENSED",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "@nit-in/acil": "file:../acil"
+  }
+}

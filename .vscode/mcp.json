@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "acil": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/acil-mcp/dist/server.js"],
+      "env": {
+        "ACIL_STORAGE": "${env:HOME}/.acil"
+      }
+    }
+  }
+}

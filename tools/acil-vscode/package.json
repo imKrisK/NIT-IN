@@ -55,6 +55,10 @@
         "title": "ACIL: Disconnect GitHub Account"
       },
       {
+        "command": "acil.storePolicyHmacKey",
+        "title": "ACIL: Store Policy Server HMAC Key"
+      },
+      {
         "command": "acil.showDashboard",
         "title": "ACIL: Open Dashboard"
       },

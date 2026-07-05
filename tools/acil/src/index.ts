@@ -28,6 +28,10 @@ export type { RouteInput, RouteResult, ModelScore } from './models/CostRouter';
 export { ACILPipeline } from './pipeline/ACILPipeline';
 export { MetaRecursiveLoop } from './pipeline/MetaRecursiveLoop';
 export type { RecursivePrediction, LoopOutcome } from './pipeline/MetaRecursiveLoop';
+
+// Feedback learning layer (Wave 11)
+export { UserFeedbackCollector } from './feedback/UserFeedbackCollector';
+export type { FeedbackEvent, FeedbackSignals, FeedbackAction } from './feedback/UserFeedbackCollector';
 export type {
   PipelineRequest,
   PipelinePreflightResult,

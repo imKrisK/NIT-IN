@@ -19,7 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ACILPipeline, EnforcementState, SessionType, MetaRecursiveLoop } from '@nit-in/acil';
+import { ACILPipeline, EnforcementState, SessionType, MetaRecursiveLoop, UserFeedbackCollector } from '@nit-in/acil';
 import { CopilotInterceptor } from './CopilotInterceptor';
 import { TelemetryCollector }  from '../TelemetryCollector';
 import { NotificationManager } from '../NotificationManager';
@@ -37,10 +37,11 @@ export class ACILChatParticipant implements vscode.Disposable {
     telemetry:     TelemetryCollector,
     notifications: NotificationManager,
     userId:        string,
+    feedback?:     UserFeedbackCollector,
   ) {
     this._pipeline    = pipeline;
-    this._interceptor = new CopilotInterceptor(pipeline, telemetry, notifications);
-    this._loop        = new MetaRecursiveLoop();
+    this._interceptor = new CopilotInterceptor(pipeline, telemetry, notifications, feedback);
+    this._loop        = new MetaRecursiveLoop(feedback);
 
     this._participant = vscode.chat.createChatParticipant(
       PARTICIPANT_ID,

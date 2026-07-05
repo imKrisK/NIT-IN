@@ -36,6 +36,7 @@ import {
 import { TelemetryCollector }  from '../TelemetryCollector';
 import { NotificationManager } from '../NotificationManager';
 import { VSCodeEmbedBridge }   from './VSCodeEmbedBridge';
+import { UserFeedbackCollector } from '@nit-in/acil';
 
 // Maps VS Code model family strings to ACIL ModelId
 // Covers all known Copilot model IDs as of VS Code 1.90–1.95
@@ -113,17 +114,25 @@ export class CopilotInterceptor {
   private _telemetry:     TelemetryCollector;
   private _notifications: NotificationManager;
   private _embedBridge:   VSCodeEmbedBridge;
+  private _feedback:      UserFeedbackCollector | null = null;
 
   constructor(
     pipeline:      ACILPipeline,
     telemetry:     TelemetryCollector,
     notifications: NotificationManager,
+    feedback?:     UserFeedbackCollector,
   ) {
     this._pipeline      = pipeline;
     this._telemetry     = telemetry;
     this._notifications = notifications;
+    this._feedback      = feedback ?? null;
     // Tier 2: TF-IDF cosine by default — upgraded to LM-scored on first sendRequest()
     this._embedBridge   = new VSCodeEmbedBridge();
+  }
+
+  /** Attach/replace feedback collector. */
+  setFeedback(feedback: UserFeedbackCollector): void {
+    this._feedback = feedback;
   }
 
   /**
@@ -197,12 +206,14 @@ export class CopilotInterceptor {
         preflight.sessionType,
       );
       if (!confirmed) {
+        this._feedback?.recordAgentic(false);
         return {
           blockedByACIL: true,
           state:         preflight.enforcement.state,
           message:       'ACIL: Agentic session cancelled by developer (cost gate).',
         };
       }
+      this._feedback?.recordAgentic(true);
     }
 
     // ── CCT: Apply compressed input to messages (Phase 24 — Wave 10 Claim 8) ──
@@ -233,9 +244,13 @@ export class CopilotInterceptor {
           if (savedTokens > 0) {
             this._notifications.notifyCCTSavings(savedTokens, preflight.cctSavingsPct);
           }
+          // Feedback: CCT accepted (Tier 2 passed)
+          this._feedback?.recordCCT(true, preflight.cctSavingsPct ?? 0, preflight.sessionType);
         }
+      } else {
+        // Feedback: CCT rejected by Tier 2 semantic check
+        this._feedback?.recordCCT(false, preflight.cctSavingsPct ?? 0, preflight.sessionType);
       }
-      // If Tier 2 rejects (score < 0.72): original messages used — safe fallback
     }
 
     // ── Forward to model ───────────────────────────────────────────────────

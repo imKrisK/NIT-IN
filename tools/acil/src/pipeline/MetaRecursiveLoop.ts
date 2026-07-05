@@ -51,6 +51,7 @@ import { ACILPipeline } from '../pipeline/ACILPipeline';
 import { SessionType } from '../core/types';
 import { DeveloperPatternIdentifier, ArchetypeProfile, SessionRecord, DailyRecord } from '../predictor/DeveloperPatternIdentifier';
 import { AuditTrail } from '../core/AuditTrail';
+import { UserFeedbackCollector, FeedbackSignals } from '../feedback/UserFeedbackCollector';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -86,13 +87,22 @@ export class MetaRecursiveLoop {
   private _generation:      number = 0;
   private _outcomes:        LoopOutcome[] = [];
   private _lastProfile:     ArchetypeProfile | null = null;
+  private _feedback:        UserFeedbackCollector | null = null;
   // TTL cache — prevents double-calibrate within 60 seconds
   private _lastCalibrated:  number = 0;
   private _lastPrediction:  RecursivePrediction | null = null;
   private static readonly CACHE_TTL_MS = 60_000;
 
-  constructor() {
+  constructor(feedback?: UserFeedbackCollector) {
     this._identifier = new DeveloperPatternIdentifier();
+    this._feedback   = feedback ?? null;
+  }
+
+  /** Attach or replace the feedback collector (can be set after construction). */
+  setFeedback(feedback: UserFeedbackCollector): void {
+    this._feedback = feedback;
+    // Bust cache so next calibrate() incorporates new feedback signals
+    this._lastCalibrated = 0;
   }
 
   /**
@@ -130,7 +140,8 @@ export class MetaRecursiveLoop {
     const preClassified  = this._lastProfile?.predictions.nextLikelySession ?? SessionType.UNKNOWN;
     const nextCostEst    = this._lastProfile?.predictions.nextSessionCostEst ?? 0.04;
     const tspMultiplier  = this._lastProfile?.predictions.tspMultiplierAdj ?? 1.0;
-    const cctThreshold   = this._adaptCCTThreshold(this._lastProfile);
+    const feedbackSignals = this._feedback?.getSignals() ?? null;
+    const cctThreshold   = this._adaptCCTThreshold(this._lastProfile, feedbackSignals);
     const accuracy       = this._computeAccuracy();
 
     const result: RecursivePrediction = {
@@ -176,7 +187,7 @@ export class MetaRecursiveLoop {
     return [
       `Developer: ${p.archetype} (${(p.confidence * 100).toFixed(0)}% confidence)`,
       `Next predicted: ${p.predictions.nextLikelySession} (~$${p.predictions.nextSessionCostEst.toFixed(3)})`,
-      `CCT threshold: ${(this._adaptCCTThreshold(p) * 100).toFixed(0)}% | TSP adj: ${p.predictions.tspMultiplierAdj.toFixed(2)}x`,
+      `CCT threshold: ${(this._adaptCCTThreshold(p, null) * 100).toFixed(0)}% | TSP adj: ${p.predictions.tspMultiplierAdj.toFixed(2)}x`,
       `Prediction accuracy: ${accStr} | Loop generation: ${this._generation}`,
     ].join('\n');
   }
@@ -229,7 +240,7 @@ export class MetaRecursiveLoop {
    * AGENT_HEAVY developers get more aggressive CCT (lower threshold = more compression).
    * CODE_REVIEWERS get conservative CCT (higher threshold = less compression).
    */
-  private _adaptCCTThreshold(profile: ArchetypeProfile | null): number {
+  private _adaptCCTThreshold(profile: ArchetypeProfile | null, signals: FeedbackSignals | null): number {
     if (!profile) return 0.72; // default
 
     const ARCHETYPE_CCT: Record<string, number> = {
@@ -241,7 +252,17 @@ export class MetaRecursiveLoop {
       CODE_REVIEWER:  0.78, // Conservative — review context is dense and precise
       DOCUMENTARIAN:  0.80, // Most conservative — doc prompts need full context
     };
-    return ARCHETYPE_CCT[profile.archetype] ?? 0.72;
+    let base = ARCHETYPE_CCT[profile.archetype] ?? 0.72;
+
+    // Apply feedback bias — developer rejection pattern adjusts the threshold
+    if (signals && signals.totalEvents >= 5) {
+      if (signals.cctThresholdBias === 'tighten') {
+        base = Math.min(base + 0.08, 0.95); // raise bar: less compression fired
+      } else if (signals.cctThresholdBias === 'loosen') {
+        base = Math.max(base - 0.06, 0.20); // lower bar: more compression fired
+      }
+    }
+    return base;
   }
 
   /**

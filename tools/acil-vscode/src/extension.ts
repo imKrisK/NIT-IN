@@ -29,6 +29,7 @@ import {
   SessionType,
   QualityRequirement,
   MetaRecursiveLoop,
+  UserFeedbackCollector,
 } from '@nit-in/acil';
 import { StatusBarManager }    from './StatusBarManager';
 import { TelemetryCollector }  from './TelemetryCollector';
@@ -40,6 +41,7 @@ import { ACILChatParticipant } from './lm/ChatParticipant';
 import { WorkspaceConfigLoader } from './config/WorkspaceConfigLoader';
 import { CursorAdapter, isRunningInCursor } from './adapters/CursorAdapter';
 import { PolicyClient } from './policy/PolicyClient';
+import * as path from 'path';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ let _outcomesFilePath: string | undefined;
 let _chatParticipant: ACILChatParticipant | undefined;
 let _output:          vscode.OutputChannel | undefined;
 let _loop:            MetaRecursiveLoop | undefined;
+let _feedback:        UserFeedbackCollector | undefined;
 let _wsConfig:        WorkspaceConfigLoader | undefined;
 let _policyClient:    PolicyClient | undefined;
 let cctSavedTodal   = 0;
@@ -135,7 +138,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     // ── MetaRecursiveLoop — load persisted outcomes ────────────────────────
-    _loop = new MetaRecursiveLoop();
+    _feedback = new UserFeedbackCollector();
+    const feedbackFilePath = path.join(context.globalStorageUri.fsPath, 'acil-feedback.json');
+    try {
+      _feedback.load(feedbackFilePath);
+      _output.appendLine(`[ACIL] UserFeedback loaded: ${_feedback.totalEvents} events`);
+    } catch { /* fresh start */ }
+
+    _loop = new MetaRecursiveLoop(_feedback);
     _outcomesFilePath = getOutcomesFilePath(context);
     try {
       _loop.load(_outcomesFilePath);
@@ -181,6 +191,18 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('acil.connectGitHub', () => connectGitHub()),
       vscode.commands.registerCommand('acil.syncNow', () => syncGitHubBalance(true)),
       vscode.commands.registerCommand('acil.disconnectGitHub', () => disconnectGitHub()),
+      vscode.commands.registerCommand('acil.storePolicyHmacKey', async () => {
+        const key = await vscode.window.showInputBox({
+          prompt:      'Enter your ACIL Policy HMAC signing key',
+          placeHolder: 'Paste key from your secrets manager',
+          password:    true,
+          ignoreFocusOut: true,
+        });
+        if (key) {
+          await context.secrets.store('acil.policyHmacKey', key);
+          vscode.window.showInformationMessage('ACIL: Policy HMAC key stored securely.');
+        }
+      }),
       vscode.commands.registerCommand('acil.showDashboard', () => {
         if (pipeline && _extensionUri) DashboardPanel.show(_extensionUri, pipeline);
       }),
@@ -229,6 +251,13 @@ export function deactivate(): void {
   }
   if (_loop && _outcomesFilePath) {
     try { _loop.save(_outcomesFilePath); } catch { /* best-effort */ }
+  }
+  if (_feedback) {
+    // _auditFilePath is in globalStorage — save feedback alongside it
+    const dir = _auditFilePath ? require('path').dirname(_auditFilePath) : undefined;
+    if (dir) {
+      try { _feedback.save(require('path').join(dir, 'acil-feedback.json')); } catch { /* best-effort */ }
+    }
   }
   statusBar?.dispose();
   telemetry?.dispose();
