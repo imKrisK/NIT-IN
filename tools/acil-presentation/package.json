@@ -1,0 +1,13 @@
+{
+  "name": "@nit-in/acil-presentation",
+  "version": "0.1.0",
+  "description": "ACIL interactive live infographic presentation server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "open": "node server.js & sleep 1 && open http://localhost:7420"
+  },
+  "keywords": [],
+  "author": "imKrisK",
+  "license": "UNLICENSED"
+}
