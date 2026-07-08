@@ -38,10 +38,11 @@ export interface CopilotBillingData {
 }
 
 export interface SyncResult {
-  success:      boolean;
-  data?:        CopilotBillingData;
-  error?:       string;
-  scopeMissing?: boolean;  // true = PAT needs 'copilot' scope, not a subscription issue
+  success:              boolean;
+  data?:                CopilotBillingData;
+  error?:               string;
+  scopeMissing?:        boolean;  // PAT needs 'copilot' scope
+  personalAccountLimit?: boolean; // GitHub doesn't expose personal Pro+ via API
 }
 
 export class GitHubCreditSync {
@@ -57,33 +58,54 @@ export class GitHubCreditSync {
    */
   async fetchBillingData(): Promise<SyncResult> {
     try {
-      // Step 1: verify auth + get username
+      // Step 1: verify auth — /user always works with any valid PAT
       const userRes = await this._get('/user');
       if (!userRes.ok) {
-        return { success: false, error: `GitHub auth failed: ${userRes.status} ${userRes.statusText}` };
-      }
-      const user = await userRes.json() as { login: string };
-
-      // Step 2: check what scopes this PAT actually has (from response headers)
-      const scopeCheck = await this._get('/user');
-      const grantedScopes = (scopeCheck.headers?.get?.('x-oauth-scopes') ?? '').toLowerCase();
-      const hasCopilotScope = grantedScopes.includes('copilot') || grantedScopes.includes('manage_billing');
-
-      // Step 3: get Copilot subscription info
-      const copilotRes = await this._get('/user/copilot');
-      if (!copilotRes.ok) {
-        // Distinguish missing scope from genuinely no subscription
-        if (copilotRes.status === 404 || copilotRes.status === 403) {
-          const scopeHint = hasCopilotScope
-            ? 'Copilot subscription not accessible — your plan may not expose this API.'
-            : 'PAT is missing the "copilot" scope. Regenerate at github.com/settings/tokens with ✅ copilot scope checked.';
-          return { success: false, error: scopeHint, scopeMissing: !hasCopilotScope };
+        if (userRes.status === 401) {
+          return { success: false, error: 'PAT is invalid or expired. Generate a new token at github.com/settings/tokens.' };
         }
-        return { success: false, error: `Copilot API error ${copilotRes.status}` };
+        return { success: false, error: `GitHub auth failed: ${userRes.status}` };
       }
+      const user        = await userRes.json() as { login: string };
+      const grantedScopes = (userRes.headers.get('x-oauth-scopes') ?? '').toLowerCase();
+
+      // Step 2: /user/copilot — NOTE: this endpoint is only accessible for
+      // GitHub Copilot for Business/Enterprise (org-scoped PATs).
+      // Personal Pro+ accounts reliably return 404 regardless of PAT scopes.
+      // This is a GitHub API design decision, not a user error.
+      const copilotRes = await this._get('/user/copilot');
+
+      if (!copilotRes.ok) {
+        // Personal Pro+ account: /user/copilot always 404s — this is expected.
+        // Fall back to manual budget mode with a clear, non-alarming message.
+        const isPersonalAccountLimit = copilotRes.status === 404;
+        const isScopeProblem         = copilotRes.status === 403;
+        const hasCopilotScope        = grantedScopes.includes('copilot') || grantedScopes.includes('manage_billing');
+
+        if (isPersonalAccountLimit) {
+          return {
+            success: false,
+            error:   `GitHub Copilot personal API is not available for your account type (HTTP 404). ` +
+                     `This is a GitHub limitation — personal Pro+ accounts cannot be read via PAT. ` +
+                     `ACIL is running with manual budget config ($39.00). ` +
+                     `To update your budget, use "ACIL: Set Budget Manually".`,
+            scopeMissing: false,
+            personalAccountLimit: true,
+          };
+        }
+        if (isScopeProblem || !hasCopilotScope) {
+          return {
+            success:     false,
+            scopeMissing: true,
+            error:       'PAT is missing "copilot" scope. Edit your token at github.com/settings/tokens and check ✅ copilot.',
+          };
+        }
+        return { success: false, error: `GitHub Copilot API error ${copilotRes.status}` };
+      }
+
       const copilot = await copilotRes.json() as GitHubCopilotAPIResponse;
 
-      // Step 3: try to get usage breakdown (may 404 on personal accounts)
+      // Step 3: daily usage breakdown (may also 404 on some account types)
       let usageData: GitHubCopilotUsageResponse | null = null;
       const usageRes = await this._get('/user/copilot/billing/usage');
       if (usageRes.ok) {

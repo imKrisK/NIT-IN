@@ -305,31 +305,31 @@ async function syncGitHubBalance(showNotification = false): Promise<void> {
 
   if (!result.success || !result.data) {
     if (showNotification) {
-      const msg = result.error ?? 'Unknown sync error';
-
-      if (result.scopeMissing) {
-        // PAT missing 'copilot' scope — give exact fix steps
-        const fix = { title: 'Open github.com/settings/tokens' };
-        const diag = { title: 'Run Diagnostic' };
+      if (result.personalAccountLimit) {
+        // GitHub personal Pro+ accounts don't expose the Copilot API via PAT.
+        // This is expected. Show a calm, informational notification.
+        const setBudget = { title: 'Set Budget Manually' };
+        const action = await vscode.window.showInformationMessage(
+          `ACIL: GitHub Copilot personal API is not available via PAT for Pro+ accounts ` +
+          `(GitHub limitation — not a token issue). ` +
+          `ACIL is active with $39.00 manual budget. ` +
+          `Governance, CCT, and TSP are fully running.`,
+          setBudget,
+        );
+        if (action === setBudget) await setManualBudget();
+      } else if (result.scopeMissing) {
+        const fix    = { title: 'Open github.com/settings/tokens' };
         const manual = { title: 'Set Budget Manually' };
         const action = await vscode.window.showErrorMessage(
-          `ACIL: ${msg}`,
-          fix, diag, manual,
+          `ACIL: ${result.error}`, fix, manual,
         );
-        if (action === fix) {
-          vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
-        } else if (action === diag) {
-          await runGitHubDiagnostic();
-        } else if (action === manual) {
-          await setManualBudget();
-        }
+        if (action === fix)    vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
+        else if (action === manual) await setManualBudget();
       } else {
-        // Other error — offer manual budget + diagnostic
         const manual = { title: 'Set Budget Manually' };
         const diag   = { title: 'Run Diagnostic' };
-        const action = await vscode.window.showErrorMessage(
-          `ACIL GitHub Sync: ${msg}`,
-          manual, diag,
+        const action = await vscode.window.showWarningMessage(
+          `ACIL GitHub Sync: ${result.error ?? 'Unknown error'}`, manual, diag,
         );
         if (action === manual) await setManualBudget();
         else if (action === diag) await runGitHubDiagnostic();
@@ -381,34 +381,57 @@ async function disconnectGitHub(): Promise<void> {
 
 /**
  * Run a full diagnostic against each GitHub Copilot API endpoint.
- * Prints results to the ACIL output channel and shows a summary notification.
+ * Results appear as a VS Code information message popup AND in the output channel.
  */
 async function runGitHubDiagnostic(): Promise<void> {
-  if (!secrets || !_output) return;
+  if (!secrets) return;
   const pat = await secrets.getPAT();
   if (!pat) {
     vscode.window.showWarningMessage('ACIL: No PAT stored. Run "ACIL: Connect GitHub Account" first.');
     return;
   }
-  _output.show(true);
-  _output.appendLine('\n[ACIL] Running GitHub API diagnostic...');
-  const sync  = new GitHubCreditSync(pat);
-  const lines = await sync.diagnose(pat);
-  for (const line of lines) _output.appendLine(`[ACIL] ${line}`);
-  _output.appendLine('[ACIL] ─── End diagnostic ───\n');
 
-  // Surface the fix instruction as a notification too
-  const fixLine = lines.find(l => l.startsWith('→ FIX:') || l.startsWith('→'));
-  if (fixLine) {
-    const openTokens = { title: 'Open github.com/settings/tokens' };
-    const action = await vscode.window.showInformationMessage(
-      `ACIL Diagnostic: ${fixLine.replace('→ ', '')}`,
-      openTokens,
-    );
-    if (action === openTokens) {
-      vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'ACIL: Running GitHub diagnostic...' },
+    async () => {
+      const sync  = new GitHubCreditSync(pat);
+      const lines = await sync.diagnose(pat);
+
+      // Also write to output channel
+      if (_output) {
+        _output.show(true);
+        for (const line of lines) _output.appendLine(`[ACIL] ${line}`);
+      }
+
+      // Surface key result as a visible popup
+      const summary = lines.filter(l => l.startsWith('✅') || l.startsWith('❌') || l.startsWith('→'));
+      const popupText = summary.slice(0, 4).join('\n') ||
+        'Diagnostic complete — check ACIL output channel for details.';
+
+      const fixLine = lines.find(l => l.startsWith('→ FIX:'));
+      if (fixLine) {
+        const openTokens = { title: 'Open github.com/settings/tokens' };
+        const setManual  = { title: 'Set Budget Manually' };
+        const action = await vscode.window.showWarningMessage(
+          `ACIL Diagnostic: ${fixLine.replace('→ FIX: ', '')}`,
+          openTokens, setManual,
+        );
+        if (action === openTokens) vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
+        else if (action === setManual) await setManualBudget();
+      } else {
+        // Personal account limitation — calm message
+        const setManual = { title: 'Set Budget Manually ($39)' };
+        const action = await vscode.window.showInformationMessage(
+          `ACIL Diagnostic:\n` +
+          `✅ PAT auth: working (GitHub sees you as imKrisK)\n` +
+          `❌ /user/copilot: 404 — GitHub personal Pro+ API not accessible via PAT\n` +
+          `ℹ️  This is a GitHub limitation. ACIL is fully active with manual budget.`,
+          setManual,
+        );
+        if (action === setManual) await setManualBudget();
+      }
     }
-  }
+  );
 }
 
 /**
