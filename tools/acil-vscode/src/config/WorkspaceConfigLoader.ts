@@ -106,6 +106,11 @@ export class WorkspaceConfigLoader {
     return this._config?.enforcementPolicy ?? 'advisory';
   }
 
+  /** Monthly budget in USD — from workspace config, VS Code settings, or default $39. */
+  get monthlyBudget(): number {
+    return this.get<number>('monthlyBudget', 'monthlyBudget', 39);
+  }
+
   /**
    * Watch for .acil.json changes and reload automatically.
    * Call onChange callback when config changes.

@@ -40,7 +40,9 @@ import { DashboardPanel }      from './dashboard/DashboardPanel';
 import { ACILChatParticipant } from './lm/ChatParticipant';
 import { WorkspaceConfigLoader } from './config/WorkspaceConfigLoader';
 import { CursorAdapter, isRunningInCursor } from './adapters/CursorAdapter';
-import { PolicyClient } from './policy/PolicyClient';
+import { PolicyClient }        from './policy/PolicyClient';
+import { ACILBootstrap }       from './bootstrap/ACILBootstrap';
+import { BalanceReconciler }   from './bootstrap/BalanceReconciler';
 import * as path from 'path';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
@@ -110,6 +112,26 @@ export function activate(context: vscode.ExtensionContext): void {
       _wsConfig!.load();
       _output?.appendLine('[ACIL] Workspace config reloaded (.acil.json changed)');
     }));
+
+    // ── Bootstrap — first-run wizard for personal accounts ────────────────
+    // Runs exactly once. Asks for current balance + monthly budget.
+    // GitHub API sync is optional — ACIL is self-sufficient from bootstrap forward.
+    if (!ACILBootstrap.isCompleted(context)) {
+      // Defer slightly so VS Code UI is fully ready
+      setTimeout(async () => {
+        const boot = await ACILBootstrap.run(context);
+        if (!boot.skipped) {
+          _wsConfig?.applyRemote({
+            version:       1,
+            monthlyBudget: boot.monthlyBudget,
+          });
+          _output?.appendLine(
+            `[ACIL] Bootstrap complete — balance: $${boot.balance.toFixed(2)} | budget: $${boot.monthlyBudget.toFixed(2)}`
+          );
+          refreshStatusBar();
+        }
+      }, 2000);
+    }
 
     // ── PolicyClient — remote policy server (optional enterprise feature) ──
     const policyServerUrl = config.get<string>('policyServerUrl', '');
@@ -193,6 +215,11 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('acil.disconnectGitHub',   () => disconnectGitHub()),
       vscode.commands.registerCommand('acil.debugGitHubSync',    () => runGitHubDiagnostic()),
       vscode.commands.registerCommand('acil.setManualBudget',    () => setManualBudget()),
+      vscode.commands.registerCommand('acil.reconcileBalance',   () => reconcileBalance()),
+      vscode.commands.registerCommand('acil.resetBootstrap',     async () => {
+        await ACILBootstrap.reset(context);
+        vscode.window.showInformationMessage('ACIL: Bootstrap reset. Restart VS Code to run setup again.');
+      }),
       vscode.commands.registerCommand('acil.storePolicyHmacKey', async () => {
         const key = await vscode.window.showInputBox({
           prompt:      'Enter your ACIL Policy HMAC signing key',
@@ -458,6 +485,34 @@ async function setManualBudget(): Promise<void> {
   }
   refreshStatusBar();
   vscode.window.showInformationMessage(`ACIL: Monthly budget set to $${budget.toFixed(2)}. Governance is active.`);
+}
+
+/**
+ * Manual balance reconciliation — personal account strategy.
+ * Compares ACIL tracked balance to user-entered GitHub billing figure.
+ * Corrects drift and logs reconciliation event.
+ */
+async function reconcileBalance(): Promise<void> {
+  if (!pipeline || !_wsConfig) {
+    vscode.window.showWarningMessage('ACIL: Extension not yet activated. Try again in a moment.');
+    return;
+  }
+  const currentBalance  = pipeline.balance;
+  const monthlyBudget   = _wsConfig.monthlyBudget;
+
+  await BalanceReconciler.run(
+    currentBalance,
+    monthlyBudget,
+    (newBalance: number) => {
+      // Apply correction via WorkspaceConfigLoader — preserves all other settings
+      _wsConfig?.applyRemote({ version: 1, monthlyBudget: newBalance + (monthlyBudget - pipeline!.totalAllocation) });
+      _output?.appendLine(
+        `[ACIL] Balance reconciled: $${currentBalance.toFixed(4)} → $${newBalance.toFixed(4)} ` +
+        `(drift: $${Math.abs(newBalance - currentBalance).toFixed(4)})`
+      );
+      refreshStatusBar();
+    },
+  );
 }
 
 // ─── Core: Manual Pre-flight ──────────────────────────────────────────────────

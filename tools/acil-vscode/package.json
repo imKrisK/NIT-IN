@@ -66,8 +66,14 @@
         "command": "acil.setManualBudget",
         "title": "ACIL: Set Budget Manually"
       },
+      {        "command": "acil.reconcileBalance",
+        "title": "ACIL: Reconcile Balance with GitHub"
+      },
       {
-        "command": "acil.showDashboard",
+        "command": "acil.resetBootstrap",
+        "title": "ACIL: Reset First-Run Setup"
+      },
+      {        "command": "acil.showDashboard",
         "title": "ACIL: Open Dashboard"
       },
       {
