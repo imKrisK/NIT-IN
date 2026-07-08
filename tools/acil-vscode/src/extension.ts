@@ -188,9 +188,11 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('acil.showForecast', () => showForecastPanel()),
       vscode.commands.registerCommand('acil.showSessionHistory', () => showHistoryPanel()),
       vscode.commands.registerCommand('acil.setMonthlyBudget', () => setMonthlyBudget()),
-      vscode.commands.registerCommand('acil.connectGitHub', () => connectGitHub()),
-      vscode.commands.registerCommand('acil.syncNow', () => syncGitHubBalance(true)),
-      vscode.commands.registerCommand('acil.disconnectGitHub', () => disconnectGitHub()),
+      vscode.commands.registerCommand('acil.connectGitHub',      () => connectGitHub()),
+      vscode.commands.registerCommand('acil.syncNow',            () => syncGitHubBalance(true)),
+      vscode.commands.registerCommand('acil.disconnectGitHub',   () => disconnectGitHub()),
+      vscode.commands.registerCommand('acil.debugGitHubSync',    () => runGitHubDiagnostic()),
+      vscode.commands.registerCommand('acil.setManualBudget',    () => setManualBudget()),
       vscode.commands.registerCommand('acil.storePolicyHmacKey', async () => {
         const key = await vscode.window.showInputBox({
           prompt:      'Enter your ACIL Policy HMAC signing key',
@@ -303,7 +305,35 @@ async function syncGitHubBalance(showNotification = false): Promise<void> {
 
   if (!result.success || !result.data) {
     if (showNotification) {
-      vscode.window.showErrorMessage(`ACIL GitHub Sync: ${result.error}`);
+      const msg = result.error ?? 'Unknown sync error';
+
+      if (result.scopeMissing) {
+        // PAT missing 'copilot' scope — give exact fix steps
+        const fix = { title: 'Open github.com/settings/tokens' };
+        const diag = { title: 'Run Diagnostic' };
+        const manual = { title: 'Set Budget Manually' };
+        const action = await vscode.window.showErrorMessage(
+          `ACIL: ${msg}`,
+          fix, diag, manual,
+        );
+        if (action === fix) {
+          vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
+        } else if (action === diag) {
+          await runGitHubDiagnostic();
+        } else if (action === manual) {
+          await setManualBudget();
+        }
+      } else {
+        // Other error — offer manual budget + diagnostic
+        const manual = { title: 'Set Budget Manually' };
+        const diag   = { title: 'Run Diagnostic' };
+        const action = await vscode.window.showErrorMessage(
+          `ACIL GitHub Sync: ${msg}`,
+          manual, diag,
+        );
+        if (action === manual) await setManualBudget();
+        else if (action === diag) await runGitHubDiagnostic();
+      }
     }
     return;
   }
@@ -347,6 +377,64 @@ async function disconnectGitHub(): Promise<void> {
   if (!secrets) return;
   await secrets.deletePAT();
   vscode.window.showInformationMessage('ACIL: GitHub account disconnected. Using manual budget config.');
+}
+
+/**
+ * Run a full diagnostic against each GitHub Copilot API endpoint.
+ * Prints results to the ACIL output channel and shows a summary notification.
+ */
+async function runGitHubDiagnostic(): Promise<void> {
+  if (!secrets || !_output) return;
+  const pat = await secrets.getPAT();
+  if (!pat) {
+    vscode.window.showWarningMessage('ACIL: No PAT stored. Run "ACIL: Connect GitHub Account" first.');
+    return;
+  }
+  _output.show(true);
+  _output.appendLine('\n[ACIL] Running GitHub API diagnostic...');
+  const sync  = new GitHubCreditSync(pat);
+  const lines = await sync.diagnose(pat);
+  for (const line of lines) _output.appendLine(`[ACIL] ${line}`);
+  _output.appendLine('[ACIL] ─── End diagnostic ───\n');
+
+  // Surface the fix instruction as a notification too
+  const fixLine = lines.find(l => l.startsWith('→ FIX:') || l.startsWith('→'));
+  if (fixLine) {
+    const openTokens = { title: 'Open github.com/settings/tokens' };
+    const action = await vscode.window.showInformationMessage(
+      `ACIL Diagnostic: ${fixLine.replace('→ ', '')}`,
+      openTokens,
+    );
+    if (action === openTokens) {
+      vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
+    }
+  }
+}
+
+/**
+ * Set monthly budget manually — fallback when GitHub API sync is not available.
+ * Writes to VS Code settings (not disk secrets).
+ */
+async function setManualBudget(): Promise<void> {
+  const current = vscode.workspace.getConfiguration('acil').get<number>('monthlyBudget', 39);
+  const input   = await vscode.window.showInputBox({
+    prompt:       'ACIL: Enter your monthly AI credit budget in USD',
+    placeHolder:  `Current: $${current} — e.g. 39 for Copilot Pro+`,
+    value:        String(current),
+    validateInput: v => {
+      const n = parseFloat(v);
+      return isNaN(n) || n <= 0 ? 'Enter a positive number (e.g. 39)' : null;
+    },
+  });
+  if (!input) return;
+  const budget = parseFloat(input);
+  await vscode.workspace.getConfiguration('acil').update('monthlyBudget', budget, vscode.ConfigurationTarget.Global);
+  // Push the new budget into WorkspaceConfigLoader so next preflight picks it up
+  if (_wsConfig) {
+    _wsConfig.applyRemote({ version: 1, monthlyBudget: budget });
+  }
+  refreshStatusBar();
+  vscode.window.showInformationMessage(`ACIL: Monthly budget set to $${budget.toFixed(2)}. Governance is active.`);
 }
 
 // ─── Core: Manual Pre-flight ──────────────────────────────────────────────────

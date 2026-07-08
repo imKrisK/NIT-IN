@@ -38,9 +38,10 @@ export interface CopilotBillingData {
 }
 
 export interface SyncResult {
-  success:    boolean;
-  data?:      CopilotBillingData;
-  error?:     string;
+  success:      boolean;
+  data?:        CopilotBillingData;
+  error?:       string;
+  scopeMissing?: boolean;  // true = PAT needs 'copilot' scope, not a subscription issue
 }
 
 export class GitHubCreditSync {
@@ -63,14 +64,22 @@ export class GitHubCreditSync {
       }
       const user = await userRes.json() as { login: string };
 
-      // Step 2: get Copilot subscription info
+      // Step 2: check what scopes this PAT actually has (from response headers)
+      const scopeCheck = await this._get('/user');
+      const grantedScopes = (scopeCheck.headers?.get?.('x-oauth-scopes') ?? '').toLowerCase();
+      const hasCopilotScope = grantedScopes.includes('copilot') || grantedScopes.includes('manage_billing');
+
+      // Step 3: get Copilot subscription info
       const copilotRes = await this._get('/user/copilot');
       if (!copilotRes.ok) {
-        // 404 = no Copilot subscription; 403 = scope missing
-        const errMsg = copilotRes.status === 404
-          ? 'No active Copilot subscription found'
-          : `Copilot API error ${copilotRes.status} — PAT may need copilot scope`;
-        return { success: false, error: errMsg };
+        // Distinguish missing scope from genuinely no subscription
+        if (copilotRes.status === 404 || copilotRes.status === 403) {
+          const scopeHint = hasCopilotScope
+            ? 'Copilot subscription not accessible — your plan may not expose this API.'
+            : 'PAT is missing the "copilot" scope. Regenerate at github.com/settings/tokens with ✅ copilot scope checked.';
+          return { success: false, error: scopeHint, scopeMissing: !hasCopilotScope };
+        }
+        return { success: false, error: `Copilot API error ${copilotRes.status}` };
       }
       const copilot = await copilotRes.json() as GitHubCopilotAPIResponse;
 
@@ -221,6 +230,63 @@ export class GitHubCreditSync {
     if (lower.includes('pro'))                                  return 300;  // Pro ~$10/mo
     if (lower.includes('business'))                             return 300;
     return 300; // conservative default
+  }
+
+  /**
+   * Diagnostic: tests each API endpoint independently and returns
+   * a human-readable report. Used by acil.debugGitHubSync command.
+   */
+  async diagnose(pat: string): Promise<string[]> {
+    const lines: string[] = ['─── ACIL GitHub PAT Diagnostic ───'];
+    const headers = {
+      Authorization:  `token ${pat}`,
+      Accept:         'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent':   'ACIL-VSCode/0.1.0',
+    };
+
+    const check = async (label: string, path: string) => {
+      try {
+        const res = await fetch(`https://api.github.com${path}`, { headers });
+        const scopes = res.headers.get('x-oauth-scopes') ?? '(none)';
+        if (res.ok) {
+          lines.push(`✅ ${label}: ${res.status} OK | scopes: ${scopes}`);
+        } else {
+          const body = await res.text().catch(() => '');
+          lines.push(`❌ ${label}: ${res.status} ${res.statusText} | scopes: ${scopes}`);
+          if (body) lines.push(`   → ${body.slice(0, 120)}`);
+        }
+        return { ok: res.ok, status: res.status, scopes };
+      } catch (e) {
+        lines.push(`💥 ${label}: network error — ${e}`);
+        return { ok: false, status: 0, scopes: '' };
+      }
+    };
+
+    const user   = await check('GET /user (auth verify)', '/user');
+    const copilot = await check('GET /user/copilot', '/user/copilot');
+    await check('GET /user/copilot/billing/usage', '/user/copilot/billing/usage');
+
+    // Diagnosis
+    lines.push('─── Diagnosis ───');
+    if (!user.ok) {
+      lines.push('→ PAT is invalid or expired. Regenerate at github.com/settings/tokens');
+    } else if (!copilot.ok && copilot.status === 404) {
+      const hasCopilotScope = user.scopes.includes('copilot') || user.scopes.includes('manage_billing');
+      if (!hasCopilotScope) {
+        lines.push('→ FIX: PAT is missing "copilot" scope.');
+        lines.push('  1. Go to: github.com/settings/tokens');
+        lines.push('  2. Edit your ACIL token → check ✅ copilot → Save');
+        lines.push('  3. Run "ACIL: Connect GitHub Account" again (no need to regenerate)');
+      } else {
+        lines.push('→ "copilot" scope present but /user/copilot returns 404.');
+        lines.push('  Your Copilot plan type may not expose this endpoint.');
+        lines.push('  Run "ACIL: Set Budget Manually" to configure without API sync.');
+      }
+    } else if (copilot.ok) {
+      lines.push('→ All endpoints accessible. Sync should work. Re-run "ACIL: Connect GitHub Account".');
+    }
+    return lines;
   }
 }
 

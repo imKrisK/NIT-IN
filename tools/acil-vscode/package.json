@@ -59,6 +59,14 @@
         "title": "ACIL: Store Policy Server HMAC Key"
       },
       {
+        "command": "acil.debugGitHubSync",
+        "title": "ACIL: Debug GitHub Sync (Diagnostic)"
+      },
+      {
+        "command": "acil.setManualBudget",
+        "title": "ACIL: Set Budget Manually"
+      },
+      {
         "command": "acil.showDashboard",
         "title": "ACIL: Open Dashboard"
       },
