@@ -132,6 +132,11 @@ export class WorkspaceConfigLoader {
     this._watcher?.dispose();
   }
 
+  /** TS 5.2+ `using` keyword support — auto-disposes watcher when scope exits. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   /**
    * Apply a remotely fetched policy (from PolicyClient).
    * Remote policy takes precedence over local .acil.json.

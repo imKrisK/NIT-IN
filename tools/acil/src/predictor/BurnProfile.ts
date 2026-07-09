@@ -24,7 +24,7 @@ export interface SessionBurnBaseline {
  * Global empirical baselines (tokens per session).
  * Source: research data + inventor's June 2026 usage analysis.
  */
-export const BASELINE_BURN_PROFILES: Record<SessionType, SessionBurnBaseline> = {
+export const BASELINE_BURN_PROFILES = {
   [SessionType.AGENTIC]: {
     minTokens: 10_000, maxTokens: 500_000, avgTokens: 85_000, p95Tokens: 250_000,
   },
@@ -46,7 +46,7 @@ export const BASELINE_BURN_PROFILES: Record<SessionType, SessionBurnBaseline> = 
   [SessionType.UNKNOWN]: {
     minTokens: 500, maxTokens: 10_000, avgTokens: 2_000, p95Tokens: 7_000,
   },
-};
+} satisfies Record<SessionType, SessionBurnBaseline>;
 
 export class BurnProfile {
   private _observed: Partial<Record<SessionType, number[]>> = {};

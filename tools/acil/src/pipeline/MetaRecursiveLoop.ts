@@ -49,7 +49,7 @@
 
 import { ACILPipeline } from '../pipeline/ACILPipeline';
 import { SessionType } from '../core/types';
-import { DeveloperPatternIdentifier, ArchetypeProfile, SessionRecord, DailyRecord } from '../predictor/DeveloperPatternIdentifier';
+import { DeveloperPatternIdentifier, ArchetypeProfile, SessionRecord, DailyRecord, DeveloperArchetype } from '../predictor/DeveloperPatternIdentifier';
 import { AuditTrail } from '../core/AuditTrail';
 import { UserFeedbackCollector, FeedbackSignals } from '../feedback/UserFeedbackCollector';
 import * as fs from 'fs';
@@ -243,7 +243,7 @@ export class MetaRecursiveLoop {
   private _adaptCCTThreshold(profile: ArchetypeProfile | null, signals: FeedbackSignals | null): number {
     if (!profile) return 0.72; // default
 
-    const ARCHETYPE_CCT: Record<string, number> = {
+    const ARCHETYPE_CCT = {
       AGENT_HEAVY:    0.60, // More aggressive — AGENTIC sessions have lots of context duplication
       ARCHITECT:      0.68,
       SPRINT_BUILDER: 0.65,
@@ -251,8 +251,7 @@ export class MetaRecursiveLoop {
       BALANCED:       0.72,
       CODE_REVIEWER:  0.78, // Conservative — review context is dense and precise
       DOCUMENTARIAN:  0.80, // Most conservative — doc prompts need full context
-    };
-    let base = ARCHETYPE_CCT[profile.archetype] ?? 0.72;
+    } satisfies Record<DeveloperArchetype, number>;    let base = ARCHETYPE_CCT[profile.archetype] ?? 0.72;
 
     // Apply feedback bias — developer rejection pattern adjusts the threshold
     if (signals && signals.totalEvents >= 5) {
