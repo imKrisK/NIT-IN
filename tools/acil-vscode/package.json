@@ -1,16 +1,33 @@
 {
   "name": "acil-vscode",
   "displayName": "ACIL — AI Credit Intelligence Layer",
-  "description": "Pre-execution AI session classification, burn rate prediction, credit enforcement, and cross-model routing for VS Code.",
+  "description": "Pre-execution LLM cost governor for VS Code. Predicts cost before tokens are spent, compresses prompts, routes to cheaper models, enforces budgets, and learns your session patterns. Patent Pending.",
   "version": "0.1.0",
   "publisher": "imKrisK",
   "private": true,
+  "license": "MIT",
+  "icon": "icon.png",
+  "preview": false,
+  "pricing": "Free",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imKrisK/NIT-IN.git"
+  },
+  "bugs": {
+    "url": "https://github.com/imKrisK/NIT-IN/issues"
+  },
+  "homepage": "https://github.com/imKrisK/NIT-IN#readme",
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
     "Other",
-    "Machine Learning"
+    "Machine Learning",
+    "Linters"
   ],
   "keywords": [
     "ai",
@@ -18,7 +35,11 @@
     "token",
     "budget",
     "llm",
-    "credits"
+    "credits",
+    "cost",
+    "governance",
+    "compression",
+    "tsp"
   ],
   "activationEvents": [
     "onStartupFinished"
