@@ -12,3 +12,7 @@ node_modules/
 .DS_Store
 *.vsix
 tsconfig*.json
+# Exclude symlinked local package source — esbuild bundles it into dist/extension.js
+../acil/
+../acil-vscode/
+../**
