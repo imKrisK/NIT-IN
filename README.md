@@ -1,95 +1,84 @@
-# NIT-IN — Node Identity Token · Integrated Network
+# NIT-IN — Node Identity Token & AI Credit Intelligence Layer
 
-> Hardware-attested sovereign identity protocol for embedded devices.
-> Patent pending — USPTO Application 19/668,817 · Filed May 6, 2026
-
----
-
-## What It Is
-
-NIT-IN is a local mesh network where every device—Arduino sensor nodes and human participants alike—mints a cryptographically unique **Node Identity Token (NIT)**. Nodes discover each other, score resonance (similarity of sensor fingerprints + behavior), and build a living social graph without a central authority.
+> **Patent Pending** — USPTO Application 64/110,180 | Filed July 13, 2026 | Confirmation #2594
 
 ---
 
-## Stack
+## ACIL — AI Credit Intelligence Layer
 
-| Layer | Technology |
-|-------|-----------|
-| Hub server | Node.js · Express 4 · WebSocket (ws) |
-| Persistence | SQLite (better-sqlite3) · WAL mode |
-| Federation | UDP LAN peer discovery + WS bridging |
-| Firmware | Arduino C++ · EEPROM-persisted identity |
-| Frontend | Vanilla HTML/CSS/JS · D3 v7 force graph |
+**Now live on VS Marketplace →** [imKrisK.acil-vscode](https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode)
 
----
+June 7 I lost $111 in one AI session.
 
-## Pages
+528 Copilot requests. One agentic run. Gone by 11 AM. No warning from GitHub. Just a bill.
 
-| Route | Description |
-|-------|-------------|
-| `/` | D3 force graph dashboard — live node map |
-| `/social` | Living Feed — real-time sensor events + signals |
-| `/onboard` | 5-phase Genesis ceremony — mint your NIT |
-| `/profile/:nit_id` | Node biography — edit, export credential |
-| `/admin` | Hub operator panel — stats, clear feed, peers |
+So I built the warning system.
+
+ACIL intercepts every LLM request **before tokens are spent**. Classifies your session type. Predicts cost. Compresses the prompt. Routes to a cheaper model if the task doesn't need the heavy one. Enforces a 6-state budget machine. Learns your patterns — gets more accurate every session.
+
+Tested backwards against June 7 data. Predicted that exact exhaustion event on June 6 input. Risk score: 0.942. GitHub showed nothing.
 
 ---
 
-## API
-
-```
-GET  /health                     — ok + mode
-GET  /api/nodes                  — all nodes
-GET  /api/nodes/:id              — node + edges + posts
-GET  /api/nodes/:id/export       — signed NIT credential JSON
-PATCH /api/nodes/:id             — edit bio/name/location/website
-GET  /api/feed                   — activity feed (limit param)
-GET  /api/graph                  — D3 nodes + edges
-GET  /api/stats                  — network density + counts
-GET  /api/network                — local stats + federation peers
-GET  /api/peers                  — connected peer hubs
-POST /api/mint                   — create human NIT
-POST /api/signal                 — post HUMAN_SIGNAL
-POST /api/ingest                 — raw Arduino telemetry
-POST /api/admin/clear-feed       — wipe feed (admin)
-```
-
----
-
-## Run Locally
+## Install
 
 ```bash
-npm install
-
-# Simulate 20 virtual Arduino nodes
-npm run sim
-
-# Hardware mode (Arduino Uno on USB serial)
-npm start
-
-# Inject a virtual Arduino node
-npm run virtual
+# VS Code Extensions — search "ACIL"
+code --install-extension imKrisK.acil-vscode
 ```
 
-Dashboard: [http://localhost:3001](http://localhost:3001)
+**MCP for Cursor / Claude Desktop** — `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "acil": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/acil-mcp/dist/server.js"]
+    }
+  }
+}
+```
 
 ---
 
-## Founder Node
+## What's Inside
+
+| Package | Purpose |
+|---|---|
+| `tools/acil/` | Core SDK — 18 TypeScript modules, 55/55 tests |
+| `tools/acil-vscode/` | VS Code extension — 164 KB VSIX, `@acil` chat participant |
+| `tools/acil-mcp/` | MCP server — 7 tools for Cursor + Claude Desktop |
+| `tools/acil-learn/` | Standalone learning SDK — zero VS Code dependency |
+| `tools/acil-policy-server/` | Enterprise policy server — HMAC-signed team config |
+| `tools/acil-presentation/` | Interactive live infographic — `node server.js` on :7420 |
+
+## The 7 Components
 
 ```
-NIT-USR-0001 · imacKris · hw_sig 338061C968FA0250
-firmware: BIRTH_RIGHTS_v1.0 · sovereign: true
-genesis: 2026-05-05
+① Classify  — SessionClassifier: 7 session types from IDE telemetry
+② Predict   — BurnPredictor + TSP: exhaustion date before tokens fire
+③ Compress  — PromptCompressor CCT + SemanticEquivalenceChecker Tier 1+2
+④ Route     — CostRouter: 10 model substitution pairs
+⑤ Enforce   — BudgetEnforcer: 6-state graduated machine
+⑥ Learn     — MetaRecursiveLoop + 7 developer archetypes (self-calibrating)
+⑦ Record    — AuditTrail: HMAC-signed tamper-proof export (SOC 2 / EU AI Act)
 ```
 
 ---
 
 ## Patent
 
-USPTO Nonprovisional · Application 19/668,817 · 35 USC 111(a)  
-Confirmation 2090 · Patent Center 75905877 · Filed May 6, 2026
+- **Wave 10** — USPTO Application 64/110,180 — Filed July 13, 2026
+  16 claims: pre-execution session classification, CCT compression,
+  semantic equivalence gate, TSP forecasting, 6-state enforcement
+- **Wave 11** — Target September 1, 2026
 
 ---
 
-*Private repository — imKrisK*
+## Author
+
+**Kristoffer Kelly** ([@imKrisK](https://github.com/imKrisK)) · Las Vegas, NV
+[conversationmine.ai](https://conversationmine.ai) · [LinkedIn](https://www.linkedin.com/in/kristofferkelly/)
+
+*Patent Pending — USPTO 64/110,180 · Confirmation #2594 · Filed July 13, 2026*
