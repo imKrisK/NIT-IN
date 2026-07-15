@@ -526,9 +526,7 @@ function fmtK(n) {
 // ── Share card ───────────────────────────────────────────────────────────────
 function updateShareCard(teamSize, plan, savings, annual, tokensSaved) {
   const perDev = (savings / teamSize).toFixed(2);
-  const roiLink = window.location.href.includes('localhost')
-    ? 'https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode'
-    : window.location.href;
+  const roiLink = 'https://nit-in.conversationmine.ai/roi';
 
   const text = `📊 My ACIL team savings estimate
 
@@ -570,11 +568,7 @@ function copyShareText(platform) {
 }
 
 function shareLinkedIn() {
-  // Once deployed on Railway, replace this URL with the live /roi endpoint
-  const roiUrl = encodeURIComponent(window.location.href.includes('localhost')
-    ? 'https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode'
-    : window.location.href
-  );
+  const roiUrl = encodeURIComponent('https://nit-in.conversationmine.ai/roi');
   window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${roiUrl}`, '_blank');
 }
 
