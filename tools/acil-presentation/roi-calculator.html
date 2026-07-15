@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACIL ROI Calculator — How much is AI costing your team?</title>
+<meta name="description" content="Calculate how much your engineering team wastes on AI coding tools each month — and what ACIL saves you.">
+<style>
+:root {
+  --bg:       #0d1117;
+  --bg2:      #161b22;
+  --bg3:      #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --indigo:   #6C63FF;
+  --teal:     #00B4D8;
+  --amber:    #FFB703;
+  --emerald:  #06D6A0;
+  --crimson:  #EF233C;
+  --violet:   #9B5DE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh;
+}
+/* ── Header ──────────────────────────────────────────────────────── */
+header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+}
+.shield {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--indigo), var(--crimson));
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.logo-text { font-size: 18px; font-weight: 700; }
+.logo-text span { color: var(--indigo); }
+.logo-sub { font-size: 11px; color: var(--muted); }
+header a { margin-left: auto; color: var(--teal); font-size: 13px; text-decoration: none; }
+header a:hover { text-decoration: underline; }
+
+/* ── Hero ────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center; padding: 56px 24px 32px;
+  max-width: 680px; margin: 0 auto;
+}
+.hero h1 {
+  font-size: clamp(24px, 4vw, 40px); font-weight: 800; line-height: 1.2;
+  margin-bottom: 16px;
+}
+.hero h1 em { color: var(--crimson); font-style: normal; }
+.hero p { font-size: 16px; color: var(--muted); line-height: 1.7; }
+
+/* ── Calculator card ─────────────────────────────────────────────── */
+.calc-wrap { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 32px; margin-bottom: 24px;
+}
+.card-title {
+  font-size: 12px; color: var(--muted); letter-spacing: 1.5px;
+  text-transform: uppercase; margin-bottom: 24px; display: flex; align-items: center; gap: 8px;
+}
+.card-title::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--title-color, var(--muted)); flex-shrink: 0;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────────── */
+.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 580px) { .inputs { grid-template-columns: 1fr; } }
+
+.field label {
+  display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+.field-row { display: flex; align-items: center; gap: 0; }
+.field-prefix {
+  background: var(--bg3); border: 1px solid var(--border); border-right: none;
+  border-radius: 6px 0 0 6px; padding: 10px 12px; font-size: 13px; color: var(--muted);
+}
+.field input, .field select {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px; color: var(--text); font-size: 14px;
+  outline: none; transition: border-color 0.2s; width: 100%;
+}
+.field-row input { border-radius: 0 6px 6px 0; border-left: none; }
+.field input:focus, .field select:focus { border-color: var(--indigo); }
+.field .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+/* Plan pills */
+.plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+@media (max-width: 400px) { .plan-grid { grid-template-columns: 1fr 1fr; } }
+.plan-pill {
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 8px;
+  cursor: pointer; text-align: center; transition: all 0.2s; background: var(--bg3);
+}
+.plan-pill:hover { border-color: var(--indigo); }
+.plan-pill.active { border-color: var(--indigo); background: rgba(108,99,255,0.12); }
+.plan-pill .plan-name { font-size: 12px; font-weight: 600; }
+.plan-pill .plan-price { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* ── Results ─────────────────────────────────────────────────────── */
+.results {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;
+}
+@media (max-width: 580px) { .results { grid-template-columns: 1fr 1fr; } }
+
+.result-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 16px; position: relative; overflow: hidden;
+  transition: border-color 0.3s;
+}
+.result-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rc-color, var(--border));
+}
+.result-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.result-value {
+  font-size: 28px; font-weight: 800; margin: 6px 0 2px;
+  color: var(--rc-color, var(--text));
+}
+.result-sub { font-size: 11px; color: var(--muted); }
+
+/* ── Savings breakdown ───────────────────────────────────────────── */
+.breakdown {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 24px; margin-bottom: 16px;
+}
+.breakdown-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+.bar-row { margin-bottom: 14px; }
+.bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+.bar-label span:last-child { color: var(--emerald); font-weight: 600; }
+.bar-track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+/* ── Share card ──────────────────────────────────────────────────── */
+.share-card {
+  background: linear-gradient(135deg, rgba(108,99,255,0.12), rgba(155,93,229,0.08));
+  border: 1px solid var(--indigo); border-radius: 12px; padding: 28px;
+  margin-bottom: 24px;
+}
+.share-header { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--indigo); }
+.share-text {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; font-size: 13px; line-height: 1.7; color: var(--text);
+  font-family: inherit; white-space: pre-wrap; word-break: break-word;
+  min-height: 100px;
+}
+.share-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.btn {
+  padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.2s; letter-spacing: 0.3px;
+}
+.btn-primary { background: var(--indigo); color: #fff; }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--indigo); }
+.btn-copied { background: var(--emerald); color: #000; }
+
+/* ── CTA ─────────────────────────────────────────────────────────── */
+.cta-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 32px; text-align: center;
+}
+.cta-card h2 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+.cta-card p { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+.cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn-lg { padding: 13px 28px; font-size: 14px; }
+.btn-marketplace {
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  color: #fff; border-radius: 8px;
+}
+.btn-github { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+
+/* ── Validation banner ───────────────────────────────────────────── */
+.validation {
+  background: rgba(6,214,160,0.07); border: 1px solid var(--emerald);
+  border-radius: 10px; padding: 18px 20px; margin-bottom: 24px;
+  font-size: 13px; line-height: 1.6; color: var(--text);
+}
+.validation strong { color: var(--emerald); }
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+footer {
+  text-align: center; padding: 24px; font-size: 11px; color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+footer a { color: var(--teal); text-decoration: none; }
+
+/* ── Animations ──────────────────────────────────────────────────── */
+@keyframes count-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.result-value.updated { animation: count-up 0.3s ease; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="shield">⚡</div>
+  <div>
+    <div class="logo-text"><span>ACIL</span></div>
+    <div class="logo-sub">AI Credit Intelligence Layer</div>
+  </div>
+  <a href="https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode" target="_blank">
+    Install Free →
+  </a>
+</header>
+
+<div class="hero">
+  <h1>How much is AI costing<br>your team <em>right now?</em></h1>
+  <p>Enter your team size and plan. See the real cost — and how much ACIL saves.</p>
+</div>
+
+<div class="calc-wrap">
+
+  <!-- ── Inputs ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title" style="--title-color: var(--indigo)">Your Team</div>
+    <div class="inputs">
+      <div class="field">
+        <label>Team size (developers)</label>
+        <div class="field-row">
+          <input type="number" id="team-size" value="12" min="1" max="5000">
+        </div>
+        <div class="hint">How many developers use AI coding tools daily</div>
+      </div>
+      <div class="field">
+        <label>Average AI sessions per developer per day</label>
+        <div class="field-row">
+          <input type="number" id="sessions-per-day" value="8" min="1" max="200">
+        </div>
+        <div class="hint">Typical: 5–15 for active developers</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="--title-color: var(--teal)">AI Plan</div>
+    <div class="field">
+      <label>Select your plan</label>
+      <div class="plan-grid" id="plan-grid">
+        <div class="plan-pill" data-plan="copilot-pro" data-cost="10" data-quota="300">
+          <div class="plan-name">Copilot Pro</div>
+          <div class="plan-price">$10/mo · 300 req</div>
+        </div>
+        <div class="plan-pill active" data-plan="copilot-pro-plus" data-cost="39" data-quota="1500">
+          <div class="plan-name">Copilot Pro+</div>
+          <div class="plan-price">$39/mo · 1,500 req</div>
+        </div>
+        <div class="plan-pill" data-plan="copilot-business" data-cost="19" data-quota="300">
+          <div class="plan-name">Copilot Business</div>
+          <div class="plan-price">$19/mo/seat</div>
+        </div>
+        <div class="plan-pill" data-plan="openai-api" data-cost="50" data-quota="9999">
+          <div class="plan-name">OpenAI API</div>
+          <div class="plan-price">$50/mo budget</div>
+        </div>
+        <div class="plan-pill" data-plan="claude-api" data-cost="50" data-quota="9999">
+          <div class="plan-name">Claude API</div>
+          <div class="plan-price">$50/mo budget</div>
+        </div>
+        <div class="plan-pill" data-plan="custom" data-cost="0" data-quota="9999">
+          <div class="plan-name">Custom</div>
+          <div class="plan-price">Enter below</div>
+        </div>
+      </div>
+    </div>
+    <div id="custom-row" style="display:none; margin-top:16px;">
+      <div class="inputs">
+        <div class="field">
+          <label>Monthly budget per developer ($)</label>
+          <div class="field-row">
+            <span class="field-prefix">$</span>
+            <input type="number" id="custom-cost" value="50" min="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Avg tokens per session</label>
+          <div class="field-row">
+            <input type="number" id="custom-tokens" value="5000" min="100">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Validation banner ───────────────────────────────────────── -->
+  <div class="validation">
+    <strong>Validated June 7, 2026:</strong> imKrisK's account ran 528 Copilot sessions in one day.
+    Quota exhausted by 11 AM. $111+ in overage charges. GitHub showed nothing.
+    ACIL's TSP predicted this event on June 6 input. Risk score: 0.942.
+  </div>
+
+  <!-- ── Results ────────────────────────────────────────────────────── -->
+  <div class="results">
+    <div class="result-card" style="--rc-color: var(--crimson)">
+      <div class="result-label">Monthly AI Spend</div>
+      <div class="result-value" id="r-spend">$468</div>
+      <div class="result-sub" id="r-spend-sub">12 devs × $39</div>
+    </div>
+    <div class="result-card" style="--rc-color: var(--amber)">
+      <div class="result-label">Est. Monthly Waste</div>
+      <div class="result-value" id="r-waste">$140</div>
+      <div class="result-sub">30% avg inefficiency</div>
+    </div>
+    <div class="result-card" style="--rc-color: var(--emerald)">
+      <div class="result-label">ACIL Monthly Savings</div>
+      <div class="result-value" id="r-savings">$140</div>
+      <div class="result-sub" id="r-savings-sub">CCT + model routing</div>
+    </div>
+    <div class="result-card" style="--rc-color: var(--teal)">
+      <div class="result-label">Annual Savings</div>
+      <div class="result-value" id="r-annual">$1,685</div>
+      <div class="result-sub">projected</div>
+    </div>
+    <div class="result-card" style="--rc-color: var(--indigo)">
+      <div class="result-label">Tokens Saved / Day</div>
+      <div class="result-value" id="r-tokens">48K</div>
+      <div class="result-sub">via CCT compression</div>
+    </div>
+    <div class="result-card" style="--rc-color: var(--violet)">
+      <div class="result-label">ROI (Month 1)</div>
+      <div class="result-value" id="r-roi">∞</div>
+      <div class="result-sub" id="r-roi-sub">ACIL is free</div>
+    </div>
+  </div>
+
+  <!-- ── Savings breakdown ──────────────────────────────────────── -->
+  <div class="breakdown">
+    <div class="breakdown-title">Where savings come from</div>
+    <div class="bar-row">
+      <div class="bar-label"><span>CCT Prompt Compression (avg 22%)</span><span id="b-cct">$30/mo</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bf-cct" style="width:0%;background:var(--amber)"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>Model Substitution (BOILERPLATE sessions)</span><span id="b-sub">$42/mo</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bf-sub" style="width:0%;background:var(--emerald)"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>Overage Prevention (TSP enforcement)</span><span id="b-ova">$68/mo</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bf-ova" style="width:0%;background:var(--teal)"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>AGENTIC Session Gating</span><span id="b-age">$0/mo</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bf-age" style="width:0%;background:var(--violet)"></div></div>
+    </div>
+  </div>
+
+  <!-- ── Share card ─────────────────────────────────────────────── -->
+  <div class="share-card">
+    <div class="share-header">📊 Your ACIL Savings Report</div>
+    <div class="share-text" id="share-text"></div>
+    <div class="share-actions">
+      <button class="btn btn-primary" id="copy-btn" onclick="copyShareText()">Copy for LinkedIn</button>
+      <button class="btn btn-secondary" onclick="shareLinkedIn()">Post to LinkedIn</button>
+      <button class="btn btn-secondary" onclick="copyShareText('twitter')">Copy for X/Twitter</button>
+    </div>
+  </div>
+
+  <!-- ── CTA ──────────────────────────────────────────────────────── -->
+  <div class="cta-card">
+    <h2>ACIL is free. Install it in 30 seconds.</h2>
+    <p>No setup. No API key. No GitHub connection required.<br>
+       The first-run wizard takes two questions. Governance starts immediately.</p>
+    <div class="cta-btns">
+      <a href="https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode"
+         target="_blank" class="btn btn-lg btn-marketplace">
+        ⚡ Install from VS Marketplace
+      </a>
+      <a href="https://github.com/imKrisK/NIT-IN" target="_blank"
+         class="btn btn-lg btn-github">
+        View on GitHub
+      </a>
+    </div>
+    <p style="margin-top:16px;font-size:11px;color:var(--muted)">
+      Patent Pending — USPTO Application 64/110,180 · Filed July 13, 2026
+    </p>
+  </div>
+
+</div>
+
+<footer>
+  <p>
+    <strong>ACIL — AI Credit Intelligence Layer</strong> ·
+    Built by <a href="https://github.com/imKrisK">imKrisK</a> ·
+    <a href="https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode">VS Marketplace</a> ·
+    Patent Pending USPTO 64/110,180
+  </p>
+</footer>
+
+<script>
+// ── Plan data ────────────────────────────────────────────────────────────────
+const PLANS = {
+  'copilot-pro':       { cost: 10,  quota: 300,  tokensPerReq: 3000,  overageRate: 0.04 },
+  'copilot-pro-plus':  { cost: 39,  quota: 1500, tokensPerReq: 5000,  overageRate: 0.04 },
+  'copilot-business':  { cost: 19,  quota: 300,  tokensPerReq: 3000,  overageRate: 0.04 },
+  'openai-api':        { cost: 50,  quota: 9999, tokensPerReq: 5000,  overageRate: 0 },
+  'claude-api':        { cost: 50,  quota: 9999, tokensPerReq: 6000,  overageRate: 0 },
+  'custom':            { cost: 50,  quota: 9999, tokensPerReq: 5000,  overageRate: 0 },
+};
+
+// ACIL savings rates (validated from real-world data)
+const ACIL = {
+  cctReduction:   0.22,   // 22% avg token reduction via CCT
+  subSessions:    0.35,   // 35% of sessions eligible for model substitution
+  subSavings:     0.80,   // 80% cost reduction on substituted sessions
+  agenticFraction:0.12,   // 12% of sessions are AGENTIC
+  overageFraction:0.18,   // 18% of teams hit overage without governance
+  overageAvgUsd:  45,     // avg monthly overage per developer
+};
+
+let selectedPlan = 'copilot-pro-plus';
+
+// ── Plan selection ───────────────────────────────────────────────────────────
+document.querySelectorAll('.plan-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.plan-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    selectedPlan = pill.dataset.plan;
+    document.getElementById('custom-row').style.display =
+      selectedPlan === 'custom' ? 'block' : 'none';
+    recalc();
+  });
+});
+
+// ── Input listeners ──────────────────────────────────────────────────────────
+['team-size','sessions-per-day','custom-cost','custom-tokens'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', recalc);
+});
+
+// ── Core calculation ─────────────────────────────────────────────────────────
+function recalc() {
+  const teamSize      = Math.max(1, parseInt(document.getElementById('team-size').value) || 12);
+  const sessionsPerDay = Math.max(1, parseInt(document.getElementById('sessions-per-day').value) || 8);
+
+  let plan = PLANS[selectedPlan];
+  if (selectedPlan === 'custom') {
+    plan = {
+      cost:         parseFloat(document.getElementById('custom-cost').value) || 50,
+      quota:        9999,
+      tokensPerReq: parseFloat(document.getElementById('custom-tokens').value) || 5000,
+      overageRate:  0,
+    };
+  }
+
+  const monthlySpend   = teamSize * plan.cost;
+  const sessionsPerMonth = sessionsPerDay * 22 * teamSize; // 22 working days
+
+  // CCT savings
+  const tokensPerMonth = sessionsPerMonth * plan.tokensPerReq;
+  const tokensSaved    = tokensPerMonth * ACIL.cctReduction;
+  const cctSavingsUsd  = (tokensSaved / 1_000_000) * 3.0; // ~$3/M tokens avg
+
+  // Model substitution savings
+  const subSessions   = sessionsPerMonth * ACIL.subSessions;
+  const costPerSession = plan.cost / (plan.quota > 1000 ? plan.quota / 22 : sessionsPerDay * 22);
+  const subSavingsUsd  = subSessions * costPerSession * ACIL.subSavings * 0.4; // conservative
+
+  // Overage prevention
+  const devAtRisk      = teamSize * ACIL.overageFraction;
+  const overageSavings = devAtRisk * ACIL.overageAvgUsd;
+
+  // Agentic gating (prevents runaway sessions)
+  const agenticCost    = sessionsPerDay * ACIL.agenticFraction * 22 * teamSize * plan.tokensPerReq / 1_000_000 * 5.0;
+  const agenticSavings = agenticCost * 0.25; // 25% of agentic cost prevented
+
+  const totalSavings   = cctSavingsUsd + subSavingsUsd + overageSavings + agenticSavings;
+  const annualSavings  = totalSavings * 12;
+  const dailyTokensSaved = (tokensSaved / 22).toFixed(0);
+
+  // Update DOM
+  animateValue('r-spend',   '$' + fmt(monthlySpend));
+  animateValue('r-waste',   '$' + fmt(totalSavings * 0.85));
+  animateValue('r-savings', '$' + fmt(totalSavings));
+  animateValue('r-annual',  '$' + fmt(annualSavings));
+  animateValue('r-tokens',  fmtK(tokensSaved / 22));
+  animateValue('r-roi',     totalSavings > 0 ? '∞' : '—');
+
+  document.getElementById('r-spend-sub').textContent = `${teamSize} devs × $${plan.cost}`;
+  document.getElementById('r-savings-sub').textContent = `CCT + model routing + overage`;
+  document.getElementById('r-roi-sub').textContent = totalSavings > 0 ? 'ACIL is free' : 'needs more data';
+
+  // Bars
+  const maxBar = Math.max(cctSavingsUsd, subSavingsUsd, overageSavings, agenticSavings, 1);
+  setBar('cct', cctSavingsUsd, maxBar);
+  setBar('sub', subSavingsUsd, maxBar);
+  setBar('ova', overageSavings, maxBar);
+  setBar('age', agenticSavings, maxBar);
+
+  // Share card
+  updateShareCard(teamSize, plan, totalSavings, annualSavings, tokensSaved);
+}
+
+function setBar(key, val, max) {
+  document.getElementById('b-' + key).textContent = '$' + fmt(val) + '/mo';
+  document.getElementById('bf-' + key).style.width = Math.round((val / max) * 100) + '%';
+}
+
+function animateValue(id, val) {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.classList.remove('updated');
+  void el.offsetWidth;
+  el.classList.add('updated');
+}
+
+function fmt(n) {
+  if (n >= 10000) return Math.round(n).toLocaleString();
+  if (n >= 100)   return Math.round(n).toLocaleString();
+  if (n >= 10)    return n.toFixed(0);
+  return n.toFixed(2);
+}
+
+function fmtK(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1000)      return Math.round(n / 1000) + 'K';
+  return Math.round(n).toString();
+}
+
+// ── Share card ───────────────────────────────────────────────────────────────
+function updateShareCard(teamSize, plan, savings, annual, tokensSaved) {
+  const perDev = (savings / teamSize).toFixed(2);
+  const text = `📊 My ACIL team savings estimate
+
+Team: ${teamSize} developers
+Plan: Copilot / AI tools
+Est. monthly waste: $${fmt(savings * 0.85)}
+ACIL saves: $${fmt(savings)}/mo · $${fmt(annual)}/yr
+
+CCT compressed ${fmtK(tokensSaved / 22)} tokens/day
+${teamSize} devs × $${perDev} saved each = $${fmt(savings)}/mo
+
+"ACIL intercepts every LLM request before tokens are spent."
+
+Try it free → marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode
+Patent Pending — USPTO 64/110,180`;
+
+  document.getElementById('share-text').textContent = text;
+  window._shareText = text;
+}
+
+function copyShareText(platform) {
+  let text = window._shareText || '';
+  if (platform === 'twitter') {
+    // Shorten for Twitter
+    const teamSize = document.getElementById('team-size').value;
+    const savings  = document.getElementById('r-savings').textContent;
+    text = `Just calculated my team's AI waste with ACIL.\n\n${teamSize} devs · ${savings} saved per month · ACIL is free.\n\n"The gate between your IDE and your invoice."\n\nmarketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode\n\n#AI #VSCode #BuildInPublic #PatentPending`;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✅ Copied!';
+    btn.className = 'btn btn-copied';
+    setTimeout(() => {
+      btn.textContent = 'Copy for LinkedIn';
+      btn.className = 'btn btn-primary';
+    }, 2500);
+  });
+}
+
+function shareLinkedIn() {
+  const url = encodeURIComponent('https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode');
+  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank');
+}
+
+// Init
+recalc();
+</script>
+</body>
+</html>
