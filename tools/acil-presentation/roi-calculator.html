@@ -526,6 +526,10 @@ function fmtK(n) {
 // ── Share card ───────────────────────────────────────────────────────────────
 function updateShareCard(teamSize, plan, savings, annual, tokensSaved) {
   const perDev = (savings / teamSize).toFixed(2);
+  const roiLink = window.location.href.includes('localhost')
+    ? 'https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode'
+    : window.location.href;
+
   const text = `📊 My ACIL team savings estimate
 
 Team: ${teamSize} developers
@@ -538,7 +542,8 @@ ${teamSize} devs × $${perDev} saved each = $${fmt(savings)}/mo
 
 "ACIL intercepts every LLM request before tokens are spent."
 
-Try it free → marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode
+Calculate yours → ${roiLink}
+Install free → marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode
 Patent Pending — USPTO 64/110,180`;
 
   document.getElementById('share-text').textContent = text;
@@ -565,8 +570,12 @@ function copyShareText(platform) {
 }
 
 function shareLinkedIn() {
-  const url = encodeURIComponent('https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode');
-  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank');
+  // Once deployed on Railway, replace this URL with the live /roi endpoint
+  const roiUrl = encodeURIComponent(window.location.href.includes('localhost')
+    ? 'https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode'
+    : window.location.href
+  );
+  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${roiUrl}`, '_blank');
 }
 
 // Init

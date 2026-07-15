@@ -190,6 +190,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── ROI Calculator ─────────────────────────────────────────────────────
+  if (url.pathname === '/roi' || url.pathname === '/roi-calculator' || url.pathname === '/roi-calculator.html') {
+    try {
+      const html = fs.readFileSync(path.join(__dirname, 'roi-calculator.html'), 'utf8');
+      return send(res, 200, html, 'text/html; charset=utf-8');
+    } catch (e) {
+      return send(res, 500, { error: 'roi-calculator.html not found' });
+    }
+  }
+
   // ── SSE stream ────────────────────────────────────────────────────────
   if (url.pathname === '/api/stream') {
     res.writeHead(200, {
