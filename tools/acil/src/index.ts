@@ -66,3 +66,13 @@ export type { BurnRateResult }    from './temporal/BurnRateCalculator';
 export type { CalendarModifiers } from './temporal/CalendarAwareModifier';
 export type { OverageRiskResult } from './temporal/OverageRiskScorer';
 export type { ForecastInput }     from './temporal/ExhaustionForecaster';
+
+// Wave 12 — Multi-Agent Orchestration
+export { SharedBudgetPool }              from './orchestration/SharedBudgetPool';
+export { ContradictionDetector }         from './orchestration/ContradictionDetector';
+export { ControlledHallucinationEngine } from './orchestration/ControlledHallucinationEngine';
+export { AgentOrchestrator }             from './orchestration/AgentOrchestrator';
+export type { AgentSource, PoolDebitResult, PoolSnapshot }         from './orchestration/SharedBudgetPool';
+export type { ContradictionResult, ConflictType, ResolutionPolicy } from './orchestration/ContradictionDetector';
+export type { ShadowRunResult, ShadowInferenceFn }                 from './orchestration/ControlledHallucinationEngine';
+export type { OrchestratorConfig, OrchestrationPreflightResult, OrchestrationResponseResult } from './orchestration/AgentOrchestrator';
