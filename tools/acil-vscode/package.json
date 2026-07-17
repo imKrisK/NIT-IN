@@ -52,6 +52,14 @@
         "title": "ACIL: Show Credit Status"
       },
       {
+        "command": "acil.openOutbox",
+        "title": "ACIL: Open Outbox Review Queue"
+      },
+      {
+        "command": "acil.checkOutbox",
+        "title": "ACIL: Check Outbox Now"
+      },
+      {
         "command": "acil.showForecast",
         "title": "ACIL: Show Spend Forecast"
       },

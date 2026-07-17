@@ -43,6 +43,9 @@ import { CursorAdapter, isRunningInCursor } from './adapters/CursorAdapter';
 import { PolicyClient }        from './policy/PolicyClient';
 import { ACILBootstrap }       from './bootstrap/ACILBootstrap';
 import { BalanceReconciler }   from './bootstrap/BalanceReconciler';
+import { OutboxClient }        from './outbox/OutboxClient';
+import { OutboxMonitor }       from './outbox/OutboxMonitor';
+import { OutboxReviewPanel }   from './outbox/OutboxReviewPanel';
 import * as path from 'path';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
@@ -62,6 +65,8 @@ let _loop:            MetaRecursiveLoop | undefined;
 let _feedback:        UserFeedbackCollector | undefined;
 let _wsConfig:        WorkspaceConfigLoader | undefined;
 let _policyClient:    PolicyClient | undefined;
+let _outboxMonitor:   OutboxMonitor | undefined;
+let _outboxReview:    OutboxReviewPanel | undefined;
 let cctSavedTodal   = 0;
 let _syncTimer:       ReturnType<typeof setInterval> | undefined;
 
@@ -204,9 +209,22 @@ export function activate(context: vscode.ExtensionContext): void {
       _output.appendLine('[ACIL] Chat participant registered: acil.assistant');
     }
 
+    // ── Outbox Monitor ───────────────────────────────────────────────────────
+    const outboxClient = new OutboxClient(() => secrets?.getPAT() ?? Promise.resolve(undefined));
+    _outboxMonitor     = new OutboxMonitor(outboxClient, () => void _outboxReview?.open());
+    _outboxReview      = new OutboxReviewPanel(outboxClient, _outboxMonitor);
+    context.subscriptions.push(_outboxMonitor);
+    _outboxMonitor.start();
+    _output.appendLine('[ACIL] Outbox monitor started');
+
     // ── Register Commands ────────────────────────────────────────────────────
     context.subscriptions.push(
       vscode.commands.registerCommand('acil.showStatus', () => showStatusPanel()),
+      vscode.commands.registerCommand('acil.openOutbox',    () => void _outboxReview?.open()),
+      vscode.commands.registerCommand('acil.checkOutbox',   async () => {
+        await _outboxMonitor?.refresh();
+        void _outboxReview?.open();
+      }),
       vscode.commands.registerCommand('acil.showForecast', () => showForecastPanel()),
       vscode.commands.registerCommand('acil.showSessionHistory', () => showHistoryPanel()),
       vscode.commands.registerCommand('acil.setMonthlyBudget', () => setMonthlyBudget()),
