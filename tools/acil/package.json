@@ -1,6 +1,6 @@
 {
   "name": "@nit-in/acil",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI Credit Intelligence Layer — Session classification, burn prediction, credit enforcement, and cost routing for LLM developer environments.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
