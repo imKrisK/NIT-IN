@@ -2,9 +2,9 @@
 
 **Pre-execution LLM cost governance for VS Code. Patent Pending.**
 
-[![Version](https://img.shields.io/badge/version-0.1.0-6C63FF)](https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode)
+[![Version](https://img.shields.io/badge/version-0.2.0-6C63FF)](https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode)
 [![License](https://img.shields.io/badge/license-MIT-06D6A0)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-55%2F55-3fb950)](https://github.com/imKrisK/NIT-IN)
+[![Tests](https://img.shields.io/badge/tests-78%2F78-3fb950)](https://github.com/imKrisK/NIT-IN)
 [![Patent](https://img.shields.io/badge/patent-pending-FFB703)](https://patentcenter.uspto.gov)
 
 ---
@@ -38,6 +38,30 @@ ACIL intercepts every `model.sendRequest()` call **before** tokens are spent and
 ## Quick Start
 
 1. Install ACIL from the Marketplace
+
+---
+
+## NEW in v0.2.0 — Outbox Monitor
+
+The **Outbox Monitor** is a lightweight reply review widget built into VS Code. When you run the BCN bilateral-watcher system and post to the Cursor Community Forum, ACIL monitors for replies and auto-drafts responses — then surfaces them in a status bar badge for your review.
+
+**Status bar badge** — appears in amber when drafts are waiting:
+```
+📬 2 pending
+```
+
+**Quick Pick review flow** (`ACIL: Open Outbox Review Queue`):
+- See all pending reply drafts with classification icon + excerpt
+- Select one → read the full draft → Approve / Edit / Reject / Skip
+- **Approve** copies reply text to clipboard + marks approved on GitHub
+- Auto re-checks on window focus + every 15 minutes
+
+**New commands:**
+- `ACIL: Open Outbox Review Queue`
+- `ACIL: Check Outbox Now`
+
+---
+
 2. The first-run wizard appears — enter your monthly budget (default: $39 for Copilot Pro+) and current balance
 3. ACIL is immediately active on every request — no GitHub API connection required
 

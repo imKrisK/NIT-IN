@@ -2,7 +2,38 @@
 
 All notable changes to ACIL — AI Credit Intelligence Layer are documented here.
 
-## [0.1.0] — 2026-07-09
+## [0.2.0] — 2026-07-17
+
+### Added — Outbox Monitor Widget
+- **`ACIL: Open Outbox Review Queue`** command — Quick Pick list of all PENDING_REVIEW reply drafts waiting for your approval
+- **`ACIL: Check Outbox Now`** command — force-refresh the outbox from GitHub immediately
+- **Status bar badge** `📬 N pending` — appears in amber when new drafts arrive, pulses `NEW ✦` for 30 seconds on first detection
+- **3-step Quick Pick review flow:** List → Detail → Action (Approve / Edit / Reject / Skip)
+- **Approve** marks draft APPROVED on GitHub + copies reply text to clipboard — paste directly in the forum
+- **Edit first** — InputBox pre-filled with draft text, save to approve
+- **Reject** — confirmation prompt, marks REJECTED, removes from queue permanently
+- **Auto re-poll** on VS Code window focus + 15-minute background interval
+- **OutboxClient** — GitHub Contents API r/w for outbox REPLY_DRAFT_*.json files (uses existing SecretStorage PAT)
+
+### Added — BCN Discourse Poller (NIT-IN repo)
+- `scripts/discourse-poller.js` — polls Cursor Community Forum engagement every 30 min
+- Writes `snapshot_*.json`, `delta_*.json`, `engagement_summary.md` to `bilateral_communications/inbox/CURSOR/`
+- BCN inbox injection: injects `ENGAGEMENT_UPDATE` delta when new replies arrive → picked up by bilateral-watcher
+
+### Added — BCN Reply Drafter (NIT-IN repo)
+- `bilateral-watcher.js` — 6-type classifier: `INSTALL_QUESTION`, `PRICING_QUESTION`, `FEATURE_REQUEST`, `PRAISE`, `COMPETITOR_MENTION`, `TECHNICAL_QUESTION`
+- Drafts voice-matched reply for each new forum reply → writes `REPLY_DRAFT_*.json` to `outbox/` with `PENDING_REVIEW` status
+
+### Changed
+- npm packages `@nit-in/acil` and `@nit-in/acil-learn` bumped to `0.2.0` to match extension
+- 78/78 tests passing (was 55 in v0.1.0 — +23 Wave 12 orchestration tests)
+
+### Technical — Wave 12 Orchestration (code complete, patent pending Dec 2026)
+- **SharedBudgetPool**: Atomic spin-lock credit pool shared across parallel AI agents
+- **ContradictionDetector**: Jaccard + negation asymmetry scoring, 5-min rolling window, 7 conflict types
+- **ControlledHallucinationEngine**: Shadow inference for exact cost measurement, 200-entry LRU cache
+
+
 
 ### Added — Core System (Wave 10)
 - **7-stage pre-execution pipeline**: Classify → Predict → Compress → Route → Enforce → Learn → Record

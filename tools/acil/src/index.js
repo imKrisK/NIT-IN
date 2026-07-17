@@ -18,7 +18,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ExhaustionForecaster = exports.OverageRiskScorer = exports.CalendarAwareModifier = exports.BurnRateCalculator = exports.SemanticEquivalenceChecker = exports.InputFormat = exports.PromptCompressor = exports.DeveloperPatternIdentifier = exports.BASELINE_BURN_PROFILES = exports.BurnProfile = exports.BurnPredictor = exports.SessionClassifier = exports.UserFeedbackCollector = exports.MetaRecursiveLoop = exports.ACILPipeline = exports.QualityRequirement = exports.CostRouter = exports.THROTTLE_SUBSTITUTION = exports.MODEL_PRICING = exports.AuditTrail = exports.BudgetEnforcer = exports.CreditBilling = exports.TokenMeter = void 0;
+exports.AgentOrchestrator = exports.ControlledHallucinationEngine = exports.ContradictionDetector = exports.SharedBudgetPool = exports.ExhaustionForecaster = exports.OverageRiskScorer = exports.CalendarAwareModifier = exports.BurnRateCalculator = exports.SemanticEquivalenceChecker = exports.InputFormat = exports.PromptCompressor = exports.DeveloperPatternIdentifier = exports.BASELINE_BURN_PROFILES = exports.BurnProfile = exports.BurnPredictor = exports.SessionClassifier = exports.UserFeedbackCollector = exports.MetaRecursiveLoop = exports.ACILPipeline = exports.QualityRequirement = exports.CostRouter = exports.THROTTLE_SUBSTITUTION = exports.MODEL_PRICING = exports.AuditTrail = exports.BudgetEnforcer = exports.CreditBilling = exports.TokenMeter = void 0;
 // Core types
 __exportStar(require("./core/types"), exports);
 // Phase 0 — Metering Engine
@@ -72,3 +72,12 @@ var OverageRiskScorer_1 = require("./temporal/OverageRiskScorer");
 Object.defineProperty(exports, "OverageRiskScorer", { enumerable: true, get: function () { return OverageRiskScorer_1.OverageRiskScorer; } });
 var ExhaustionForecaster_1 = require("./temporal/ExhaustionForecaster");
 Object.defineProperty(exports, "ExhaustionForecaster", { enumerable: true, get: function () { return ExhaustionForecaster_1.ExhaustionForecaster; } });
+// Wave 12 — Multi-Agent Orchestration
+var SharedBudgetPool_1 = require("./orchestration/SharedBudgetPool");
+Object.defineProperty(exports, "SharedBudgetPool", { enumerable: true, get: function () { return SharedBudgetPool_1.SharedBudgetPool; } });
+var ContradictionDetector_1 = require("./orchestration/ContradictionDetector");
+Object.defineProperty(exports, "ContradictionDetector", { enumerable: true, get: function () { return ContradictionDetector_1.ContradictionDetector; } });
+var ControlledHallucinationEngine_1 = require("./orchestration/ControlledHallucinationEngine");
+Object.defineProperty(exports, "ControlledHallucinationEngine", { enumerable: true, get: function () { return ControlledHallucinationEngine_1.ControlledHallucinationEngine; } });
+var AgentOrchestrator_1 = require("./orchestration/AgentOrchestrator");
+Object.defineProperty(exports, "AgentOrchestrator", { enumerable: true, get: function () { return AgentOrchestrator_1.AgentOrchestrator; } });
