@@ -114,10 +114,22 @@ async function emitPulse() {
   catch(e) { log(`PULSE error: ${e.message}`); }
 }
 
+// ── Discourse Poller Integration ────────────────────────────────────────────
+const DISCOURSE_ENABLED = process.env.DISCOURSE_POLL !== 'false';
+let discoursePoller = null;
+try { discoursePoller = require('./scripts/discourse-poller'); } catch(e) { /* optional module */ }
+
 async function run() {
-  log(`BCN Watcher v${BCN_VERSION} \u2014 ${DOMAIN_ID}`);
+  log(`BCN Watcher v${BCN_VERSION} — ${DOMAIN_ID}`);
   try { await processInbox(); } catch(e) { log(`Init scan: ${e.message}`); }
   try { await emitPulse(); } catch(e) { log(`Init PULSE: ${e.message}`); }
+
+  // Start Discourse poller alongside the inbox watcher
+  if (DISCOURSE_ENABLED && discoursePoller) {
+    log('Starting Discourse poller...');
+    discoursePoller.pollAll().catch(e => log(`Discourse init: ${e.message}`));
+  }
+
   setInterval(async () => {
     try { await processInbox(); } catch(e) { log(`Poll: ${e.message}`); }
   }, POLL_SECONDS * 1000);

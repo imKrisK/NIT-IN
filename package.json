@@ -7,7 +7,10 @@
     "start": "node hub/server.js",
     "sim": "node hub/server.js --simulate",
     "virtual": "node tools/virtual-node.js",
-    "virtual3": "node tools/virtual-node.js --count=3"
+    "virtual3": "node tools/virtual-node.js --count=3",
+    "watcher": "node bilateral-watcher.js",
+    "poller": "node scripts/discourse-poller.js",
+    "poller:once": "DISCOURSE_POLL_SECONDS=0 node scripts/discourse-poller.js"
   },
   "dependencies": {
     "@serialport/parser-readline": "^12.0.0",
