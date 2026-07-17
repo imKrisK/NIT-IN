@@ -1,6 +1,6 @@
 {
   "name": "@nit-in/acil-learn",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "ACIL Meta-Recursive Learning SDK — self-calibrating LLM cost governance for third-party embedding.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
