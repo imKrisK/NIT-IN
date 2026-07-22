@@ -14,6 +14,7 @@
 import * as vscode from 'vscode';
 import { OutboxClient, ReplyDraft } from './OutboxClient';
 import { OutboxMonitor } from './OutboxMonitor';
+import { DiscordWebhookClient } from './DiscordWebhookClient';
 
 const CLASSIFICATION_ICONS: Record<string, string> = {
   INSTALL_QUESTION:   '$(wrench)',
@@ -29,6 +30,7 @@ export class OutboxReviewPanel {
   constructor(
     private readonly client:  OutboxClient,
     private readonly monitor: OutboxMonitor,
+    private readonly discord: DiscordWebhookClient,
   ) {}
 
   /** Entry point — show the list of pending drafts. */
@@ -96,6 +98,11 @@ export class OutboxReviewPanel {
         description: 'Marks APPROVED + copies text so you can paste in the forum',
       },
       {
+        action:      'approve_discord',
+        label:       '$(megaphone)  Approve + Post to Discord',
+        description: 'Marks APPROVED + posts reply directly to Discord channel via webhook',
+      },
+      {
         action:      'edit',
         label:       '$(edit)  Edit draft first',
         description: 'Open in input box, then approve',
@@ -130,9 +137,10 @@ export class OutboxReviewPanel {
     if (!pick) return;
 
     switch (pick.action) {
-      case 'approve': await this._approve(draft, draft.draft_reply); break;
-      case 'edit':    await this._edit(draft);                        break;
-      case 'reject':  await this._reject(draft);                      break;
+      case 'approve':         await this._approve(draft, draft.draft_reply);        break;
+      case 'approve_discord': await this._approveAndPost(draft, draft.draft_reply); break;
+      case 'edit':            await this._edit(draft);                               break;
+      case 'reject':          await this._reject(draft);                             break;
       case 'open':
         void vscode.env.openExternal(vscode.Uri.parse(draft.topic_url));
         break;
@@ -166,6 +174,50 @@ export class OutboxReviewPanel {
   }
 
   // ── Actions ─────────────────────────────────────────────────────────────────
+
+  private async _approveAndPost(draft: ReplyDraft, text: string): Promise<void> {
+    // Check webhook configured first
+    const configured = await this.discord.isConfigured();
+    if (!configured) {
+      const setup = await vscode.window.showWarningMessage(
+        'Discord webhook not configured. Set it up first.',
+        'Connect Discord Webhook'
+      );
+      if (setup) await vscode.commands.executeCommand('acil.connectDiscordWebhook');
+      return;
+    }
+
+    try {
+      // 1. Mark APPROVED on GitHub
+      await this.client.updateStatus(draft, 'APPROVED', text);
+
+      // 2. Post to Discord via webhook
+      await this.discord.postReply({
+        username:       'imac_$trut',
+        replyTo:        draft.reply_to.username,
+        classification: draft.classification,
+        text,
+        forumUrl:       draft.topic_url,
+        topicTitle:     `Topic ${draft.topic_id}`,
+      });
+
+      // 3. Mark POSTED on GitHub
+      await this.client.updateStatus(draft, 'POSTED', text);
+
+      void vscode.window.showInformationMessage(
+        `Posted reply to @${draft.reply_to.username} on Discord + marked POSTED on GitHub.`,
+        'Open Thread'
+      ).then(choice => {
+        if (choice === 'Open Thread') {
+          void vscode.env.openExternal(vscode.Uri.parse(draft.topic_url));
+        }
+      });
+    } catch (e: any) {
+      void vscode.window.showErrorMessage(`ACIL Outbox: Discord post failed — ${e.message}`);
+    }
+    await this.monitor.refresh();
+    if (this.monitor.pending.length > 0) await this._showList(this.monitor.pending);
+  }
 
   private async _approve(draft: ReplyDraft, text: string): Promise<void> {
     try {

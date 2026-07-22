@@ -46,6 +46,7 @@ import { BalanceReconciler }   from './bootstrap/BalanceReconciler';
 import { OutboxClient }        from './outbox/OutboxClient';
 import { OutboxMonitor }       from './outbox/OutboxMonitor';
 import { OutboxReviewPanel }   from './outbox/OutboxReviewPanel';
+import { DiscordWebhookClient } from './outbox/DiscordWebhookClient';
 import * as path from 'path';
 
 // ─── Extension state ─────────────────────────────────────────────────────────
@@ -210,12 +211,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     // ── Outbox Monitor ───────────────────────────────────────────────────────
-    const outboxClient = new OutboxClient(() => secrets?.getPAT() ?? Promise.resolve(undefined));
-    _outboxMonitor     = new OutboxMonitor(outboxClient, () => void _outboxReview?.open());
-    _outboxReview      = new OutboxReviewPanel(outboxClient, _outboxMonitor);
+    const outboxClient  = new OutboxClient(() => secrets?.getPAT() ?? Promise.resolve(undefined));
+    const discordClient = new DiscordWebhookClient(
+      (key) => Promise.resolve(context.secrets.get(key))
+    );
+    _outboxMonitor  = new OutboxMonitor(outboxClient, () => void _outboxReview?.open());
+    _outboxReview   = new OutboxReviewPanel(outboxClient, _outboxMonitor, discordClient);
     context.subscriptions.push(_outboxMonitor);
     _outboxMonitor.start();
-    _output.appendLine('[ACIL] Outbox monitor started');
+    _output.appendLine('[ACIL] Outbox monitor + Discord webhook client started');
 
     // ── Register Commands ────────────────────────────────────────────────────
     context.subscriptions.push(
@@ -224,6 +228,25 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('acil.checkOutbox',   async () => {
         await _outboxMonitor?.refresh();
         void _outboxReview?.open();
+      }),
+      vscode.commands.registerCommand('acil.connectDiscordWebhook', async () => {
+        const url = await vscode.window.showInputBox({
+          title:       'ACIL: Connect Discord Webhook',
+          prompt:      'Paste your Discord Incoming Webhook URL',
+          placeHolder: 'https://discord.com/api/webhooks/...',
+          ignoreFocusOut: true,
+          password:    true,   // hides URL from shoulder surfers
+        });
+        if (!url) return;
+        try {
+          await discordClient.setWebhookUrl(
+            (key, value) => Promise.resolve(context.secrets.store(key, value)),
+            url
+          );
+          void vscode.window.showInformationMessage('ACIL: Discord webhook connected. Outbox replies can now post directly to Discord.');
+        } catch (e: any) {
+          void vscode.window.showErrorMessage(`ACIL: Invalid webhook URL — ${e.message}`);
+        }
       }),
       vscode.commands.registerCommand('acil.showForecast', () => showForecastPanel()),
       vscode.commands.registerCommand('acil.showSessionHistory', () => showHistoryPanel()),

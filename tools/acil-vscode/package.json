@@ -2,7 +2,7 @@
   "name": "acil-vscode",
   "displayName": "ACIL — AI Credit Intelligence Layer",
   "description": "Pre-execution LLM cost governor for VS Code. Predicts cost before tokens are spent, compresses prompts, routes to cheaper models, enforces budgets, and learns your session patterns. Patent Pending.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "imKrisK",
   "private": true,
   "license": "MIT",
@@ -50,6 +50,10 @@
       {
         "command": "acil.showStatus",
         "title": "ACIL: Show Credit Status"
+      },
+      {
+        "command": "acil.connectDiscordWebhook",
+        "title": "ACIL: Connect Discord Webhook"
       },
       {
         "command": "acil.openOutbox",
