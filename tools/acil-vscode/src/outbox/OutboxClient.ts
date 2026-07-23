@@ -38,7 +38,7 @@ export interface ReplyDraft {
 }
 
 const REPO_OWNER = 'imKrisK';
-const REPO_NAME  = 'META-VOICE-SYSTEM';
+const REPO_NAME  = 'NIT-IN';
 const OUTBOX_PATH = 'bilateral_communications/outbox';
 const GH_HOST    = 'api.github.com';
 const USER_AGENT = 'ACIL-OutboxClient/1.0';
