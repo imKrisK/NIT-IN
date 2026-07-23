@@ -2,6 +2,41 @@
 
 All notable changes to ACIL — AI Credit Intelligence Layer are documented here.
 
+## [0.3.0] — 2026-07-22
+
+### Added — Discord Webhook Bilateral Automation
+- **`ACIL: Connect Discord Webhook`** command — stores Discord Incoming Webhook URL in VS Code SecretStorage (password mode input, never logged)
+- **`$(megaphone) Approve + Post to Discord`** action in Outbox Review Queue — marks draft APPROVED on GitHub, posts rich embed to Discord channel, marks POSTED on GitHub — zero manual paste
+- **`DiscordWebhookClient`** — posts to Discord via Incoming Webhook API with rich embeds (title, classification, forum link, ACIL cyan color, footer, timestamp)
+- **ACIL color palette** for Discord embeds: normal/advisory/warning/critical/info/approved/rejected
+- **Rate limit backoff** — 429 retry-after respected automatically
+- **ACIL Control Discord server** — private `#outbox-replies` channel receives all approved reply embeds
+- **OutboxClient repo fix** — reads from `imKrisK/NIT-IN` (already authorized) instead of separate META-VOICE-SYSTEM repo
+
+### How the full bilateral loop works
+```
+Cursor forum reply → discourse-poller detects (30 min)
+→ BCN delta injected to inbox/CURSOR/
+→ bilateral-watcher.js classifies reply + drafts response
+→ REPLY_DRAFT written to bilateral_communications/outbox/
+→ 📬 NEW ✦ status bar badge fires in VS Code
+→ Click badge → Quick Pick → select draft
+→ Approve + Post to Discord
+→ Rich embed posts to #outbox-replies instantly
+→ GitHub file marked POSTED automatically
+→ Zero paste, zero browser, zero AutoMod friction
+```
+
+### Verified
+- Full bilateral loop tested end-to-end July 22, 2026
+- Toast confirmed: "Posted reply to @testuser42 on Discord + marked POSTED on GitHub"
+- All 5 action paths working: Approve / Approve+Discord / Edit / Reject / Skip
+
+
+### Fixed
+- Marketplace listing update: README and CHANGELOG now reflect v0.2.0 Outbox Monitor feature set
+- Version sync: `@nit-in/acil` and `@nit-in/acil-learn` aligned to 0.2.1
+
 ## [0.2.0] — 2026-07-17
 
 ### Added — Outbox Monitor Widget

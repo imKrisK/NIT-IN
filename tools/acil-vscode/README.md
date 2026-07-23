@@ -2,7 +2,7 @@
 
 **Pre-execution LLM cost governance for VS Code. Patent Pending.**
 
-[![Version](https://img.shields.io/badge/version-0.2.0-6C63FF)](https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode)
+[![Version](https://img.shields.io/badge/version-0.3.0-6C63FF)](https://marketplace.visualstudio.com/items?itemName=imKrisK.acil-vscode)
 [![License](https://img.shields.io/badge/license-MIT-06D6A0)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-78%2F78-3fb950)](https://github.com/imKrisK/NIT-IN)
 [![Patent](https://img.shields.io/badge/patent-pending-FFB703)](https://patentcenter.uspto.gov)
@@ -38,6 +38,22 @@ ACIL intercepts every `model.sendRequest()` call **before** tokens are spent and
 ## Quick Start
 
 1. Install ACIL from the Marketplace
+
+---
+
+## NEW in v0.3.0 — Discord Webhook Bilateral Automation
+
+Approve a reply draft and it **posts directly to your Discord channel** — no paste, no browser, no AutoMod friction.
+
+**Setup:**
+1. In Discord: right-click any channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy URL
+2. In VS Code: `ACIL: Connect Discord Webhook` → paste URL → Enter
+
+**In the Outbox Review Queue**, you now get a 5th action:
+```
+$(megaphone) Approve + Post to Discord
+```
+This marks the draft APPROVED on GitHub → posts a rich embed to your Discord channel → marks POSTED. One click, fully bilateral.
 
 ---
 
