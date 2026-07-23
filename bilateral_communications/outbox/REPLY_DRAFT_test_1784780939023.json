@@ -1,0 +1,19 @@
+{
+  "type": "REPLY_DRAFT",
+  "platform": "cursor_forum",
+  "topic_id": 165981,
+  "topic_url": "https://forum.cursor.com/t/165981",
+  "reply_to": {
+    "post_number": 2,
+    "username": "testuser42",
+    "created_at": "2026-07-23T04:28:59.020Z",
+    "like_count": 2,
+    "excerpt": "how do I install it?",
+    "reply_to_post_number": 1
+  },
+  "classification": "INSTALL_QUESTION",
+  "draft_reply": "hey @testuser42 — full setup in the README. restart Cursor after adding mcp.json config.",
+  "status": "PENDING_REVIEW",
+  "generated_at": "2026-07-23T04:28:59.023Z",
+  "generated_by": "test-v030"
+}
