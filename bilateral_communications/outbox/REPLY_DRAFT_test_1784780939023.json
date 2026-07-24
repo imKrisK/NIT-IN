@@ -13,7 +13,7 @@
   },
   "classification": "INSTALL_QUESTION",
   "draft_reply": "hey @testuser42 — full setup in the README. restart Cursor after adding mcp.json config.",
-  "status": "PENDING_REVIEW",
+  "status": "APPROVED",
   "generated_at": "2026-07-23T04:28:59.023Z",
   "generated_by": "test-v030"
 }
