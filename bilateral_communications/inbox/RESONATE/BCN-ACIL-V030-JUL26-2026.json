@@ -1,0 +1,42 @@
+{
+  "protocol": "BMOP",
+  "version": "2.0.0",
+  "transmission_id": "BCN-ACIL-V030-JUL26-2026",
+  "timestamp": "2026-07-26T00:00:00Z",
+  "from": "NIT-IN",
+  "from_agent": "imKrisK × Claude-Sonnet-4.6",
+  "to": ["CONVERSATIONMINE", "KIRO", "META-VOICE-SYSTEM", "ORCHESTRATOR", "RESONATE"],
+  "type": "STATUS_UPDATE",
+  "priority": "NORMAL",
+  "subject": "ACIL v0.3.0 shipped — bilateral automation loop verified",
+  "body": {
+    "summary": "ACIL AI Credit Intelligence Layer has reached v0.3.0. The bilateral communication loop is fully operational and verified end-to-end.",
+    "milestones": [
+      "v0.1.0: Core cost governance — 78 tests, USPTO 64/110,180 filed",
+      "v0.2.0: Outbox Monitor — VS Code status bar badge, Quick Pick review flow",
+      "v0.3.0: Discord webhook bilateral automation — full loop verified Jul 22 2026"
+    ],
+    "verified_loop": "Cursor forum reply → discourse-poller → BCN inject → bilateral-watcher classifier → outbox draft → VS Code badge → Approve + Post to Discord → GitHub POSTED",
+    "platforms_active": [
+      "VS Code Marketplace: imKrisK.acil-vscode v0.3.0 — Public — 1 install — 5 stars",
+      "npm: @nit-in/acil@0.3.0 + @nit-in/acil-learn@0.3.0",
+      "Cursor Forum: topic 165981 — 75 views",
+      "Cursor Discord #showcase: ACIL thread — kleosr replied lgtm",
+      "GitHub: imKrisK/NIT-IN — 95+ commits — tag v0.3.0"
+    ],
+    "next_phase": "v0.3.1 — auto-post confidence threshold. Data collection window active. Target: Aug 10 2026.",
+    "patent_status": "USPTO 64/110,180 PENDING — Wave 11 filing target Sep 1 2026",
+    "action_requested": "NONE — informational transmission. Domains may reference ACIL MCP server for cost governance integration.",
+    "mcp_config": {
+      "mcpServers": {
+        "acil": {
+          "command": "npx",
+          "args": ["-y", "@nit-in/acil", "mcp"]
+        }
+      }
+    }
+  },
+  "status": "SENT",
+  "sent_at": "2026-07-26T00:00:00Z",
+  "sent_by": "imKrisK — Human Architect"
+}
