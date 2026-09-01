@@ -13,6 +13,7 @@ const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const { WebSocketServer } = require('ws');
+const { requireCmSubscription, registerAuthCallback } = require('./cm-auth');
 const { generateKeyPairSync, createPublicKey, verify: ed25519Verify } = require('crypto');
 
 const db                                        = require('./db');
@@ -185,6 +186,7 @@ const server = http.createServer(app);
 app.set('trust proxy', 1);
 app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
+registerAuthCallback(app);
 
 // ── CF-aware IP helper ─────────────────────────────────────────────────────────────
 function _clientIp(req) {
@@ -262,7 +264,7 @@ app.get('/api/network', (_req, res) => {
 });
 
 // Admin page
-app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
+app.get('/admin', requireCmSubscription, (_req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
 
 // Admin API — clear feed
 app.post('/api/admin/clear-feed', requireAuth, (_req, res) => {
