@@ -13,7 +13,6 @@ const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const { WebSocketServer } = require('ws');
-const { requireCmSubscription, registerAuthCallback } = require('./cm-auth');
 const { generateKeyPairSync, createPublicKey, verify: ed25519Verify } = require('crypto');
 
 // ── ConversationMine subscription gate (no external deps) ────────────────────
