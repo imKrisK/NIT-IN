@@ -16,6 +16,55 @@ const { WebSocketServer } = require('ws');
 const { requireCmSubscription, registerAuthCallback } = require('./cm-auth');
 const { generateKeyPairSync, createPublicKey, verify: ed25519Verify } = require('crypto');
 
+// ── ConversationMine subscription gate (no external deps) ────────────────────
+const CM_JWT_SECRET = process.env.CM_JWT_SECRET || '';
+const COM_DOMAIN = process.env.COM_DOMAIN || 'https://conversationmine.com';
+
+function _verifyCmToken(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    if (!payload || payload.subscription_status !== 'active') return null;
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    // Verify HMAC signature using built-in crypto
+    const crypto = require('crypto');
+    const expected = crypto.createHmac('sha256', CM_JWT_SECRET)
+      .update(`${parts[0]}.${parts[1]}`).digest('base64url');
+    if (expected !== parts[2]) return null;
+    return payload;
+  } catch { return null; }
+}
+
+function requireCmSubscription(req, res, next) {
+  const token = (req.cookies && req.cookies.cm_token)
+    || (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token || !_verifyCmToken(token)) {
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.status(401).json({ error: 'subscription_required', login_url: COM_DOMAIN + '/login' });
+    }
+    const ssoTarget = encodeURIComponent(`${req.protocol}://${req.hostname}/auth/callback?return_to=${encodeURIComponent(req.originalUrl)}`);
+    return res.redirect(`${COM_DOMAIN}/api/auth/sso?return_to=${ssoTarget}`);
+  }
+  req.cmUser = _verifyCmToken(token);
+  next();
+}
+
+function registerAuthCallback(app) {
+  app.get('/auth/callback', (req, res) => {
+    const ssoToken = req.query.cm_sso || '';
+    const returnTo = req.query.return_to || '/';
+    if (!ssoToken) return res.redirect(`${COM_DOMAIN}/login`);
+    const payload = _verifyCmToken(ssoToken);
+    if (!payload) return res.redirect(`${COM_DOMAIN}/login`);
+    // Re-encode as a simple base64url cookie value
+    const cookieVal = Buffer.from(ssoToken).toString('base64url');
+    const maxAge = (payload.plan === 'annual' ? 366 : 31) * 24 * 3600 * 1000;
+    res.cookie('cm_token', ssoToken, { httpOnly: true, secure: true, sameSite: 'lax', maxAge, path: '/' });
+    res.redirect(returnTo);
+  });
+}
+
 const db                                        = require('./db');
 const registry                                  = require('./nit-registry');
 const { startDiscovery, setBroadcast, handleMessage } = require('./serial-bridge');
